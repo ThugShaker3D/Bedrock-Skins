@@ -1,0 +1,17 @@
+{
+  "bedrockskins.gui.title": "Bedrock Skins",
+  "bedrockskins.gui.packs": "Skin Packs",
+  "bedrockskins.gui.skins": "Skins",
+  "bedrockskins.gui.preview": "Preview",
+  "bedrockskins.button.favorite": "Favorite",
+  "bedrockskins.button.unfavorite": "Unfavorite",
+  "bedrockskins.button.select": "Select Skin",
+  "bedrockskins.button.reset": "Reset to Default",
+  "bedrockskins.button.open_packs": "Open Skin Packs Folder",
+  "bedrockskins.preview.unavailable": "Preview unavailable",
+  "bedrockskins.message.reset_default": "Reset skin to default",
+  "bedrockskins.message.set_skin": "Set skin to %s",
+
+  "key.bedrockskins.open": "Change Skin",
+  "key.category.bedrockskins.controls": "Bedrock Skins"
+}

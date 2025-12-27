@@ -1,0 +1,16 @@
+# gradle
+.gradle/
+build/
+out/
+classes/
+run/
+
+# kotlin
+.kotlin/
+
+# vscode
+.settings/
+.vscode/
+bin/
+.classpath
+.project

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "${id}",
+  "version": "${version}",
+  "name": "${name}",
+  "description": "Allows Bedrock Edition Skin Packs to be used directly in Java Edition.",
+  "authors": [
+    "BrandonItaly"
+  ],
+  "contact": {
+    "homepage": "https://modrinth.com/project/bedrock-skins/",
+    "sources": "https://github.com/BrandonItaly/bedrock-skins/"
+  },
+  "license": "MIT",
+  "icon": "assets/bedrockskins/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.brandonitaly.bedrockskins.BedrockSkins"
+    ],
+    "client": [
+      "com.brandonitaly.bedrockskins.client.BedrockSkinsClient"
+    ],
+    "modmenu": [
+      "com.brandonitaly.bedrockskins.client.ModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "bedrockskins.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.17",
+    "fabric-language-kotlin": ">=${fabric_kotlin}",
+    "minecraft": "${minecraft}"
+  }
+}

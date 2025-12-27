@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "package": "com.brandonitaly.bedrockskins.mixins",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "MixinPlayerEntityRenderer",
+    "MixinLivingEntityRenderer",
+    "MixinPlayerEntityRenderState",
+    "MixinArmorFeatureRenderer",
+    "MixinCapeFeatureRenderer",
+    "MixinElytraFeatureRenderer",
+    "MixinPlayerListEntry",
+    "MixinTranslationStorage"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
