@@ -258,8 +258,13 @@ class BedrockPlayerModel(
             }
         }
     }
+
+    fun setBedrockPartVisible(partName: String, visible: Boolean) {
+        // partsMap contains the ModelParts mapped by their original Bedrock names
+        partsMap[partName]?.visible = visible
+    }
     
-   override fun setAngles(state: PlayerEntityRenderState) {
+    override fun setAngles(state: PlayerEntityRenderState) {
         super.setAngles(state)
         
         if (animationArmsOutFront) {
