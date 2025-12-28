@@ -394,7 +394,7 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
     inner class SkinPackEntry(val packId: String, val translationKey: String, val fallbackName: String) : AlwaysSelectedEntryListWidget.Entry<SkinPackEntry>() {
         override fun render(context: DrawContext, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
             val isSelected = selectedPack == packId
-            val color = if (isSelected) 0xFFFFFF00.toInt() else 0xFFFFFFFF.toInt()
+            val color = if (isSelected) 0xFFFFFF00.toInt() else if (hovered) 0xFFFFFFA0.toInt() else 0xFFFFFFFF.toInt()
             val translated = SkinPackLoader.getTranslation(translationKey) ?: fallbackName
             context.drawTextWithShadow(textRenderer, Text.literal(translated), getX() + 2, getY() + 6, color)
         }
@@ -449,7 +449,7 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
             cells.forEachIndexed { index, cell ->
                 val x = startX + (index * (cellWidth + padding))
                 val isHovered = mouseX >= x && mouseX < x + cellWidth && mouseY >= startY && mouseY < startY + cellHeight
-                cell.render(context, x, startY, cellWidth, cellHeight, isHovered, tickDelta)
+                cell.render(context, x, startY, cellWidth, cellHeight, isHovered, tickDelta, mouseX, mouseY)
             }
         }
 
@@ -506,7 +506,7 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
             try { SkinManager.resetPreviewSkin(uuid.toString()) } catch (_: Exception) {}
         }
 
-        fun render(context: DrawContext, x: Int, y: Int, w: Int, h: Int, hovered: Boolean, delta: Float) {
+        fun render(context: DrawContext, x: Int, y: Int, w: Int, h: Int, hovered: Boolean, delta: Float, mouseX: Int, mouseY: Int) {
             val isSelected = selectedSkin == skin
             
             val borderColor = if (isSelected) 0xFFFFFF00.toInt() else if (hovered) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
@@ -522,6 +522,11 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
                 val pX = (x + w / 2).toFloat()
                 val pY = (y + h / 2).toFloat() 
                 InventoryScreen.drawEntity(context, x + 2, y + 2, x + w - 2, y + h - 4, scale, 0.0625f, pX, pY, player!!)
+            }
+
+            // Vanilla tooltip when hovering
+            if (hovered) {
+                context.drawTooltip(textRenderer, Text.literal(name), mouseX, mouseY)
             }
         }
 
