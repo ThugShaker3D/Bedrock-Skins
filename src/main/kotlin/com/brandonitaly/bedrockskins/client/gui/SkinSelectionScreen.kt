@@ -83,12 +83,24 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
         previewBounds = Rect(skinBounds.x + skinBounds.w + gap, contentTop, previewW, contentHeight)
 
         // Lists
-        packList = SkinPackListWidget(client!!, packBounds.w, packBounds.h, packBounds.y, 24)
+        packList = SkinPackListWidget(client!!, packBounds.w, packBounds.h, packBounds.y, 24,
+            { id -> selectPack(id) },
+            { id -> selectedPack == id },
+            textRenderer
+        )
         packList!!.setX(packBounds.x)
         addDrawableChild(packList)
 
         // Grid Widget (Cell Height = 85 for player + text)
-        skinGrid = SkinGridWidget(client!!, skinBounds.w, skinBounds.h, skinBounds.y, 90)
+        skinGrid = SkinGridWidget(
+            client!!, skinBounds.w, skinBounds.h, skinBounds.y, 90,
+            { skin -> selectSkin(skin) },
+            { selectedSkin },
+            textRenderer,
+            { key -> try { SkinPackLoader.registerTextureFor(key) } catch (e: Exception) { e.printStackTrace() } },
+            { uuid, pack, skinName -> SkinManager.setPreviewSkin(uuid, pack, skinName) },
+            { uuid -> try { SkinManager.resetPreviewSkin(uuid) } catch (e: Exception) { e.printStackTrace() } }
+        )
         skinGrid!!.setX(skinBounds.x)
         addDrawableChild(skinGrid)
 
@@ -184,7 +196,7 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
             val displayKey = skin?.safePackName ?: packId
             val fallback = if (packId == "skinpack.Favorites") "Favorites" else (skin?.packDisplayName ?: packId)
             
-            packList!!.addEntryPublic(SkinPackEntry(packId, displayKey, fallback))
+            packList!!.addEntryPublic(SkinPackEntry(packId, displayKey, fallback, { id -> selectPack(id) }, { selectedPack == packId }, textRenderer))
         }
     }
 
@@ -257,7 +269,7 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
 
         // Chunk skins into rows
         skins.chunked(columns).forEach { rowSkins ->
-            skinGrid?.addEntryPublic(SkinRowEntry(rowSkins))
+            skinGrid?.addSkinsRow(rowSkins)
         }
     }
 
@@ -379,166 +391,5 @@ class SkinSelectionScreen(private val parent: Screen?) : Screen(Text.translatabl
             }
             Runtime.getRuntime().exec(cmd)
         } catch (e: Exception) { e.printStackTrace() }
-    }
-
-    // --- Custom Widgets ---
-
-    inner class SkinPackListWidget(client: MinecraftClient, width: Int, height: Int, y: Int, itemHeight: Int) :
-        AlwaysSelectedEntryListWidget<SkinPackEntry>(client, width, height, y, itemHeight) {
-        override fun getRowWidth(): Int = width - 10
-        override fun getScrollbarX(): Int = this.x + this.width - 6
-        fun addEntryPublic(entry: SkinPackEntry) = super.addEntry(entry)
-        fun clear() = super.clearEntries()
-    }
-
-    inner class SkinPackEntry(val packId: String, val translationKey: String, val fallbackName: String) : AlwaysSelectedEntryListWidget.Entry<SkinPackEntry>() {
-        override fun render(context: DrawContext, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
-            val isSelected = selectedPack == packId
-            val color = if (isSelected) 0xFFFFFF00.toInt() else if (hovered) 0xFFFFFFA0.toInt() else 0xFFFFFFFF.toInt()
-            val translated = SkinPackLoader.getTranslation(translationKey) ?: fallbackName
-            context.drawTextWithShadow(textRenderer, Text.literal(translated), getX() + 2, getY() + 6, color)
-        }
-
-        override fun mouseClicked(click: Click, doubled: Boolean): Boolean {
-            selectPack(packId)
-            client?.soundManager?.play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0f))
-            return true
-        }
-        override fun getNarration(): Text = Text.literal(packId)
-    }
-
-    // --- GRID SYSTEM ---
-
-    inner class SkinGridWidget(client: MinecraftClient, width: Int, height: Int, y: Int, itemHeight: Int) :
-        AlwaysSelectedEntryListWidget<SkinRowEntry>(client, width, height, y, itemHeight) {
-        
-        override fun getRowWidth(): Int = width - 10
-        override fun getScrollbarX(): Int = this.x + this.width - 6
-
-        override fun drawSelectionHighlight(context: DrawContext, entry: SkinRowEntry, color: Int) {
-        }
-        
-        fun addEntryPublic(entry: SkinRowEntry) = super.addEntry(entry)
-        
-        fun clear() {
-            // Must clean up the dummy entities created in the cells
-            children().forEach { row -> row.cleanup() }
-            super.clearEntries()
-        }
-    }
-
-    inner class SkinRowEntry(private val skins: List<LoadedSkin>) : AlwaysSelectedEntryListWidget.Entry<SkinRowEntry>() {
-        private val cells = mutableListOf<SkinCell>()
-
-        init {
-            // Initialize a display cell for each skin in this row
-            skins.forEach { skin -> cells.add(SkinCell(skin)) }
-        }
-
-        fun cleanup() {
-            cells.forEach { it.cleanup() }
-        }
-
-        override fun render(context: DrawContext, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
-            val startX = getX()
-            val startY = getY()
-            val cellWidth = 60
-            val cellHeight = 85
-            val padding = 5
-
-            cells.forEachIndexed { index, cell ->
-                val x = startX + (index * (cellWidth + padding))
-                val isHovered = mouseX >= x && mouseX < x + cellWidth && mouseY >= startY && mouseY < startY + cellHeight
-                cell.render(context, x, startY, cellWidth, cellHeight, isHovered, tickDelta, mouseX, mouseY)
-            }
-        }
-
-        override fun mouseClicked(click: Click, doubled: Boolean): Boolean {
-            val startX = getX()
-            val cellWidth = 60
-            val padding = 5
-            val localX = click.x - startX
-            if (localX < 0) return false
-            
-            val index = (localX / (cellWidth + padding)).toInt()
-            if (index in cells.indices) {
-                val cellStart = index * (cellWidth + padding)
-                if (localX >= cellStart && localX <= cellStart + cellWidth) {
-                     val cell = cells[index]
-                     selectSkin(cell.skin)
-                     client?.soundManager?.play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0f))
-                     if (doubled) applySkin()
-                     return true
-                }
-            }
-            return false
-        }
-        
-        override fun getNarration(): Text = Text.empty()
-    }
-
-    inner class SkinCell(val skin: LoadedSkin) {
-        private var player: PreviewPlayer? = null
-        private val uuid: UUID = UUID.randomUUID()
-        private val name: String 
-
-        init {
-            val translated = SkinPackLoader.getTranslation(skin.safeSkinName) ?: skin.skinDisplayName
-            name = translated
-            
-            val world = client?.world
-            if (world != null) {
-                val key = skin.key
-                val parts = key.split(":", limit = 2)
-                if (parts.size == 2) {
-                    try {
-                        SkinPackLoader.registerTextureFor(key)
-                        SkinManager.setPreviewSkin(uuid.toString(), parts[0], parts[1])
-                        player = PreviewPlayer(world, GameProfile(uuid, ""))
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
-        }
-
-        fun cleanup() {
-            try { SkinManager.resetPreviewSkin(uuid.toString()) } catch (_: Exception) {}
-        }
-
-        fun render(context: DrawContext, x: Int, y: Int, w: Int, h: Int, hovered: Boolean, delta: Float, mouseX: Int, mouseY: Int) {
-            val isSelected = selectedSkin == skin
-            
-            val borderColor = if (isSelected) 0xFFFFFF00.toInt() else if (hovered) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
-            val bgColor = if (isSelected) 0x80555555.toInt() else 0x40000000.toInt()
-            
-            context.fill(x, y, x + w, y + h, bgColor)
-            drawBorder(context, x, y, w, h, borderColor)
-
-            // Render Tiny Entity
-            if (player != null) {
-                val scale = 30
-                // Calculate the center of the render area
-                val pX = (x + w / 2).toFloat()
-                val pY = (y + h / 2).toFloat() 
-                InventoryScreen.drawEntity(context, x + 2, y + 2, x + w - 2, y + h - 4, scale, 0.0625f, pX, pY, player!!)
-            }
-
-            // Vanilla tooltip when hovering
-            if (hovered) {
-                context.drawTooltip(textRenderer, Text.literal(name), mouseX, mouseY)
-            }
-        }
-
-        private fun drawBorder(context: DrawContext, x: Int, y: Int, width: Int, height: Int, color: Int) {
-            context.fill(x, y, x + width, y + 1, color) // Top
-            context.fill(x, y + height - 1, x + width, y + height, color) // Bottom
-            context.fill(x, y + 1, x + 1, y + height - 1, color) // Left
-            context.fill(x + width - 1, y + 1, x + width, y + height - 1, color) // Right
-        }
-    }
-
-    class PreviewPlayer(world: ClientWorld, profile: GameProfile) : OtherClientPlayerEntity(world, profile) {
-        init { dataTracker.set(PlayerEntity.PLAYER_MODE_CUSTOMIZATION_ID, 127.toByte()) }
     }
 }
