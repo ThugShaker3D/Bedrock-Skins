@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.UUID;
 
-//? if <1.21.11 {
+//? if <=1.21.8 {
 /*import net.minecraft.client.render.VertexConsumerProvider;*/
 //?} else {
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
@@ -53,7 +53,7 @@ public abstract class MixinElytraFeatureRenderer {
 
     // --- Injectors ---
 
-    //? if <1.21.11 {
+    //? if <=1.21.8 {
     /*@Inject(method = "render", at = @At("HEAD"))
     private void beforeRender(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, BipedEntityRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
         bedrockSkins$applyOffset(matrices, state);

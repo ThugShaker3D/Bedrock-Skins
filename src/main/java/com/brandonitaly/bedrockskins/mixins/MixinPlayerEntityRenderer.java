@@ -1,13 +1,5 @@
 package com.brandonitaly.bedrockskins.mixins;
 
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Identifier;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import com.brandonitaly.bedrockskins.client.BedrockModelManager;
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
 import com.brandonitaly.bedrockskins.client.SkinManager;
@@ -16,22 +8,32 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
+import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.Identifier;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-//? if <1.21.11 {
+//? if <=1.21.8 {
 /*import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumerProvider;*/
 //?} else {
 import net.minecraft.entity.PlayerLikeEntity;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
-import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+    //? if <1.21.11 {
+    /*import net.minecraft.client.render.RenderLayer;*/
+    //?} else {
+    import net.minecraft.client.render.RenderLayers;
+    //?}
 //?}
 
 @Mixin(PlayerEntityRenderer.class)
 public abstract class MixinPlayerEntityRenderer {
-
-    // --- Shared Helper Methods ---
 
     @Unique
     private void bedrockSkins$renderArm(boolean isRightArm, MatrixStack matrices, int light, Identifier skinTexture, boolean sleeveVisible, Object rendererOrQueue, CallbackInfo ci) {
@@ -42,17 +44,13 @@ public abstract class MixinPlayerEntityRenderer {
 
         if (bedrockModel != null) {
             String side = isRightArm ? "right" : "left";
-            String Side = isRightArm ? "Right" : "Left";
-
-            // Get Arm Part
-            String partKey = side + "_arm";
-            var part = bedrockModel.partsMap.get(partKey);
-            if (part == null) part = bedrockModel.partsMap.get(side + "Arm");
-
-            // Get Sleeve Part
-            String sleeveKey = side + "_sleeve";
-            var sleeve = bedrockModel.partsMap.get(sleeveKey);
-            if (sleeve == null) sleeve = bedrockModel.partsMap.get(side + "Sleeve");
+            
+            var parts = bedrockModel.partsMap;
+            var part = parts.get(side + "_arm");
+            if (part == null) part = parts.get(side + "Arm");
+            
+            var sleeve = parts.get(side + "_sleeve");
+            if (sleeve == null) sleeve = parts.get(side + "Sleeve");
 
             if (part != null) {
                 String skinKey = SkinManager.getSkin(uuid.toString());
@@ -61,11 +59,12 @@ public abstract class MixinPlayerEntityRenderer {
 
                 final var finalPart = part;
                 final var finalSleeve = sleeve;
-                boolean sleeveIsChild = finalPart.hasChild(sleeveKey) || finalPart.hasChild(side + "Sleeve");
+                boolean sleeveIsChild = finalPart.hasChild(side + "_sleeve") || finalPart.hasChild(side + "Sleeve");
 
-                //? if <1.21.11 {
+                //? if <=1.21.8 {
                 /*
-                VertexConsumerProvider vertexConsumers = (VertexConsumerProvider) rendererOrQueue;
+                // --- 1.21.8 Logic (VertexConsumerProvider) ---
+                var consumers = (VertexConsumerProvider) rendererOrQueue;
                 var layer = RenderLayer.getEntityTranslucent(texture);
                 
                 MatrixStack ms = new MatrixStack();
@@ -78,15 +77,20 @@ public abstract class MixinPlayerEntityRenderer {
                     finalSleeve.visible = sleeveVisible;
                 }
 
-                finalPart.render(ms, vertexConsumers.getBuffer(layer), light, OverlayTexture.DEFAULT_UV);
-                
+                finalPart.render(ms, consumers.getBuffer(layer), light, OverlayTexture.DEFAULT_UV);
                 if (finalSleeve != null && !sleeveIsChild && sleeveVisible) {
-                    finalSleeve.render(ms, vertexConsumers.getBuffer(layer), light, OverlayTexture.DEFAULT_UV);
+                    finalSleeve.render(ms, consumers.getBuffer(layer), light, OverlayTexture.DEFAULT_UV);
                 }
                 */
                 //?} else {
-                OrderedRenderCommandQueue queue = (OrderedRenderCommandQueue) rendererOrQueue;
+                // --- 1.21.9 & 1.21.11 Logic (OrderedRenderCommandQueue) ---
+                var queue = (OrderedRenderCommandQueue) rendererOrQueue;
+                
+                //? if <1.21.11 {
+                /*var layer = RenderLayer.getEntityTranslucent(texture);*/
+                //?} else {
                 var layer = RenderLayers.entityTranslucent(texture);
+                //?}
 
                 queue.submitCustom(matrices, layer, (entry, consumer) -> {
                     MatrixStack ms = new MatrixStack();
@@ -111,41 +115,37 @@ public abstract class MixinPlayerEntityRenderer {
         }
     }
 
-    // --- Injectors ---
-
-    //? if <1.21.11 {
+    //? if <=1.21.8 {
     /*@Inject(method = "updateRenderState", at = @At("RETURN"))
     private void updateRenderState(AbstractClientPlayerEntity player, PlayerEntityRenderState state, float tickDelta, CallbackInfo ci) {
-        if (state instanceof BedrockSkinState skinState) {
-            skinState.setUniqueId(player.getUuid());
-        }
+        if (state instanceof BedrockSkinState skinState) skinState.setUniqueId(player.getUuid());
     }
 
     @Inject(method = "renderRightArm", at = @At("HEAD"), cancellable = true)
-    private void renderRightArm(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, Identifier skinTexture, boolean sleeveVisible, CallbackInfo ci) {
-        bedrockSkins$renderArm(true, matrices, light, skinTexture, sleeveVisible, vertexConsumers, ci);
+    private void renderRightArm(MatrixStack matrices, VertexConsumerProvider consumers, int light, Identifier tex, boolean sleeve, CallbackInfo ci) {
+        bedrockSkins$renderArm(true, matrices, light, tex, sleeve, consumers, ci);
     }
 
     @Inject(method = "renderLeftArm", at = @At("HEAD"), cancellable = true)
-    private void renderLeftArm(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, Identifier skinTexture, boolean sleeveVisible, CallbackInfo ci) {
-        bedrockSkins$renderArm(false, matrices, light, skinTexture, sleeveVisible, vertexConsumers, ci);
+    private void renderLeftArm(MatrixStack matrices, VertexConsumerProvider consumers, int light, Identifier tex, boolean sleeve, CallbackInfo ci) {
+        bedrockSkins$renderArm(false, matrices, light, tex, sleeve, consumers, ci);
     }*/
     //?} else {
     @Inject(method = "updateRenderState", at = @At("RETURN"))
     private void updateRenderState(PlayerLikeEntity player, PlayerEntityRenderState state, float tickDelta, CallbackInfo ci) {
-        if (player instanceof AbstractClientPlayerEntity clientPlayer && state instanceof BedrockSkinState skinState) {
-            skinState.setUniqueId(clientPlayer.getUuid());
+        if (player instanceof AbstractClientPlayerEntity cp && state instanceof BedrockSkinState skinState) {
+            skinState.setUniqueId(cp.getUuid());
         }
     }
 
     @Inject(method = "renderRightArm", at = @At("HEAD"), cancellable = true)
-    private void renderRightArm(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, Identifier skinTexture, boolean sleeveVisible, CallbackInfo ci) {
-        bedrockSkins$renderArm(true, matrices, light, skinTexture, sleeveVisible, queue, ci);
+    private void renderRightArm(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, Identifier tex, boolean sleeve, CallbackInfo ci) {
+        bedrockSkins$renderArm(true, matrices, light, tex, sleeve, queue, ci);
     }
 
     @Inject(method = "renderLeftArm", at = @At("HEAD"), cancellable = true)
-    private void renderLeftArm(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, Identifier skinTexture, boolean sleeveVisible, CallbackInfo ci) {
-        bedrockSkins$renderArm(false, matrices, light, skinTexture, sleeveVisible, queue, ci);
+    private void renderLeftArm(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, Identifier tex, boolean sleeve, CallbackInfo ci) {
+        bedrockSkins$renderArm(false, matrices, light, tex, sleeve, queue, ci);
     }
     //?}
 
@@ -157,9 +157,7 @@ public abstract class MixinPlayerEntityRenderer {
                 String skinKey = SkinManager.getSkin(uuid.toString());
                 if (skinKey != null) {
                     var skin = SkinPackLoader.loadedSkins.get(skinKey);
-                    if (skin != null && skin.identifier != null) {
-                        ci.setReturnValue(skin.identifier);
-                    }
+                    if (skin != null && skin.identifier != null) ci.setReturnValue(skin.identifier);
                 }
             }
         }

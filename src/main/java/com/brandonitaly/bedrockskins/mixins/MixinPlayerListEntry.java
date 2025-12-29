@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-//? if <1.21.11 {
+//? if <=1.21.8 {
 /*import net.minecraft.client.util.SkinTextures;*/
 //?} else {
 import net.minecraft.entity.player.SkinTextures;
@@ -24,7 +24,7 @@ public abstract class MixinPlayerListEntry {
     @Shadow
     public abstract GameProfile getProfile();
 
-    //? if <1.21.11 {
+    //? if <=1.21.8 {
     /*@Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
     private void onGetSkinTextures(CallbackInfoReturnable<SkinTextures> cir) {*/
     //?} else {
@@ -62,7 +62,7 @@ public abstract class MixinPlayerListEntry {
             // Define default Elytra ID
             Identifier defaultElytraId = Identifier.of("minecraft", "textures/entity/equipment/wings/elytra.png");
 
-            //? if <1.21.11 {
+            //? if <=1.21.8 {
             /*Identifier elytraId = original.elytraTexture() != null ? original.elytraTexture() : (original.capeTexture() != null ? original.capeTexture() : defaultElytraId);
 
             SkinTextures newTextures = new SkinTextures(

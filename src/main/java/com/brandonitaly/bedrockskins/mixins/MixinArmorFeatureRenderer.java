@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.UUID;
 
-//? if <1.21.11 {
+//? if <=1.21.8 {
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 //?} else {
@@ -73,7 +73,7 @@ public abstract class MixinArmorFeatureRenderer {
             var textures = entry.getSkinTextures();
             if (textures == null) return false;
 
-            //? if <1.21.11 {
+            //? if <=1.21.8 {
             /*
             // Reflection fallback for older versions
             java.lang.reflect.Method capeMethod = textures.getClass().getMethod("cape");
@@ -120,7 +120,7 @@ public abstract class MixinArmorFeatureRenderer {
 
     // --- Injectors ---
 
-    //? if <1.21.11 {
+    //? if <=1.21.8 {
     /*@Inject(method = "render", at = @At("HEAD"))
     private void onRenderHead(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, BipedEntityRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
         UUID uuid = (state instanceof BedrockSkinState skinState) ? skinState.getUniqueId() : null;

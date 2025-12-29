@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-//? if <1.21.11 {
+//? if <=1.21.8 {
 /*import net.minecraft.client.render.VertexConsumerProvider;*/
 //?} else {
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
@@ -61,7 +61,7 @@ public abstract class MixinLivingEntityRenderer {
 
     // --- Injectors ---
 
-    //? if <1.21.11 {
+    //? if <=1.21.8 {
     /*@Inject(method = "render", at = @At("HEAD"))
     private void onRenderHead(LivingEntityRenderState state, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, CallbackInfo ci) {
         bedrockSkins$swapModel(state);
