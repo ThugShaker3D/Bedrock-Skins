@@ -31,19 +31,45 @@ class SkinPackEntry(
     private val isSelectedFn: () -> Boolean,
     private val textRenderer: TextRenderer
 ) : AlwaysSelectedEntryListWidget.Entry<SkinPackEntry>() {
-    override fun render(context: DrawContext, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
+
+    // --- Shared Logic ---
+
+    private fun renderCommon(context: DrawContext, x: Int, y: Int, hovered: Boolean) {
         val isSelected = isSelectedFn()
         val color = if (isSelected) 0xFFFFFF00.toInt() else if (hovered) 0xFFFFFFA0.toInt() else 0xFFFFFFFF.toInt()
         val translated = SkinPackLoader.getTranslation(translationKey) ?: fallbackName
-        context.drawTextWithShadow(textRenderer, Text.literal(translated), getX() + 2, getY() + 6, color)
+        context.drawTextWithShadow(textRenderer, Text.literal(translated), x + 2, y + 6, color)
+    }
+
+    private fun clickCommon(): Boolean {
+        onSelect(packId)
+        MinecraftClient.getInstance().soundManager?.play(
+            net.minecraft.client.sound.PositionedSoundInstance.master(net.minecraft.sound.SoundEvents.UI_BUTTON_CLICK, 1.0f)
+        )
+        return true
+    }
+
+    // --- Version Specific Wrappers ---
+
+    //? if <=1.21.8 {
+    /*
+    override fun render(context: DrawContext, index: Int, y: Int, x: Int, entryWidth: Int, entryHeight: Int, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
+        renderCommon(context, x, y, hovered)
+    }
+
+    override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
+        return clickCommon()
+    }
+    */
+    //?} else {
+    override fun render(context: DrawContext, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
+        renderCommon(context, getX(), getY(), hovered)
     }
 
     override fun mouseClicked(click: net.minecraft.client.gui.Click, doubled: Boolean): Boolean {
-        onSelect(packId)
-        val client = MinecraftClient.getInstance()
-        client.soundManager?.play(net.minecraft.client.sound.PositionedSoundInstance.master(net.minecraft.sound.SoundEvents.UI_BUTTON_CLICK, 1.0f))
-        return true
+        return clickCommon()
     }
+    //?}
 
     override fun getNarration(): Text = Text.literal(packId)
 }

@@ -29,13 +29,14 @@ class SkinGridWidget(
     override fun getRowWidth(): Int = width - 10
     override fun getScrollbarX(): Int = this.x + this.width - 6
 
+    //? if <=1.21.8 {
+    /*override fun drawSelectionHighlight(context: DrawContext, startX: Int, startY: Int, width: Int, height: Int, color: Int) {}*/
+    //?} else {
     override fun drawSelectionHighlight(context: DrawContext, entry: SkinRowEntry, color: Int) {}
+    //?}
 
     fun addEntryPublic(entry: SkinRowEntry) = super.addEntry(entry)
-
-    fun addSkinsRow(skins: List<LoadedSkin>) {
-        addEntryPublic(SkinRowEntry(skins))
-    }
+    fun addSkinsRow(skins: List<LoadedSkin>) = addEntryPublic(SkinRowEntry(skins))
 
     fun clear() {
         children().forEach { row -> row.cleanup() }
@@ -49,35 +50,28 @@ class SkinGridWidget(
 
         fun cleanup() { cells.forEach { it.cleanup() } }
 
-        override fun render(context: DrawContext, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
-            val startX = getX()
-            val startY = getY()
-            val cellWidth = CELL_WIDTH
-            val cellHeight = CELL_HEIGHT
-            val padding = CELL_PADDING
+        // --- Shared Logic ---
 
-            cells.forEachIndexed { index, cell ->
-                val x = startX + (index * (cellWidth + padding))
-                val isHovered = mouseX >= x && mouseX < x + cellWidth && mouseY >= startY && mouseY < startY + cellHeight
-                cell.render(context, x, startY, cellWidth, cellHeight, isHovered, tickDelta, mouseX, mouseY)
+        private fun renderCommon(context: DrawContext, x: Int, y: Int, mouseX: Int, mouseY: Int, tickDelta: Float) {
+            cells.forEachIndexed { i, cell ->
+                val cx = x + (i * (CELL_WIDTH + CELL_PADDING))
+                val isHovered = mouseX >= cx && mouseX < cx + CELL_WIDTH && mouseY >= y && mouseY < y + CELL_HEIGHT
+                cell.render(context, cx, y, CELL_WIDTH, CELL_HEIGHT, isHovered, tickDelta, mouseX, mouseY)
             }
         }
 
-        override fun mouseClicked(click: net.minecraft.client.gui.Click, doubled: Boolean): Boolean {
-            val startX = getX()
-            val cellWidth = CELL_WIDTH
-            val padding = CELL_PADDING
-            val localX = click.x - startX
+        private fun clickCommon(localX: Int, doubled: Boolean): Boolean {
             if (localX < 0) return false
-
-            val index = (localX / (cellWidth + padding)).toInt()
+            val index = localX / (CELL_WIDTH + CELL_PADDING)
+            
             if (index in cells.indices) {
-                val cellStart = index * (cellWidth + padding)
-                if (localX >= cellStart && localX <= cellStart + cellWidth) {
+                val cellStart = index * (CELL_WIDTH + CELL_PADDING)
+                if (localX >= cellStart && localX <= cellStart + CELL_WIDTH) {
                     val cell = cells[index]
                     onSelectSkin(cell.skin)
-                    val client = MinecraftClient.getInstance()
-                    client.soundManager?.play(net.minecraft.client.sound.PositionedSoundInstance.master(net.minecraft.sound.SoundEvents.UI_BUTTON_CLICK, 1.0f))
+                    MinecraftClient.getInstance().soundManager?.play(
+                        net.minecraft.client.sound.PositionedSoundInstance.master(net.minecraft.sound.SoundEvents.UI_BUTTON_CLICK, 1.0f)
+                    )
                     if (doubled) onSelectSkin(cell.skin)
                     return true
                 }
@@ -85,15 +79,36 @@ class SkinGridWidget(
             return false
         }
 
+        // --- Version Specific Wrappers ---
+
+        //? if <=1.21.8 {
+        /*
+        override fun render(context: DrawContext, index: Int, y: Int, x: Int, entryWidth: Int, entryHeight: Int, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
+            renderCommon(context, x, y, mouseX, mouseY, tickDelta)
+        }
+
+        override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
+            return clickCommon((mouseX - getX()).toInt(), false)
+        }
+        */
+        //?} else {
+        override fun render(context: DrawContext, mouseX: Int, mouseY: Int, hovered: Boolean, tickDelta: Float) {
+            renderCommon(context, getX(), getY(), mouseX, mouseY, tickDelta)
+        }
+
+        override fun mouseClicked(click: net.minecraft.client.gui.Click, doubled: Boolean): Boolean {
+            return clickCommon((click.x - getX()).toInt(), doubled)
+        }
+        //?}
+
         override fun getNarration(): Text = Text.empty()
 
         inner class SkinCell(val skin: LoadedSkin) {
             private var player: PreviewPlayer? = null
             private val uuid: UUID = UUID.randomUUID()
-            private val name: String
+            private val name: String = SkinPackLoader.getTranslation(skin.safeSkinName) ?: skin.skinDisplayName
 
             init {
-                name = SkinPackLoader.getTranslation(skin.safeSkinName) ?: skin.skinDisplayName
                 val world: ClientWorld? = MinecraftClient.getInstance().world
                 if (world != null) {
                     val parts = skin.key.split(":", limit = 2)
@@ -117,11 +132,11 @@ class SkinGridWidget(
                 context.fill(x, y, x + w, y + h, bgColor)
                 drawBorder(context, x, y, w, h, borderColor)
 
-                if (player != null) {
-                    val scale = 30
+                player?.let {
                     val pX = (x + w / 2).toFloat()
                     val pY = (y + h / 2).toFloat()
-                    InventoryScreen.drawEntity(context, x + 2, y + 2, x + w - 2, y + h - 4, scale, 0.0625f, pX, pY, player!!)
+                    // Draw entity with simplified args
+                    InventoryScreen.drawEntity(context, x + 2, y + 2, x + w - 2, y + h - 4, 30, 0.0625f, pX, pY, it)
                 }
 
                 if (hovered) context.drawTooltip(textRenderer, Text.literal(name), mouseX, mouseY)

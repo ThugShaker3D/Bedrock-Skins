@@ -233,6 +233,7 @@ object SkinPackLoader {
                 val id = Identifier.of("bedrockskins", "capes/${skin.safePackName}/${skin.safeSkinName}")
                 MinecraftClient.getInstance().textureManager.registerTexture(id, NativeImageBackedTexture({ "bedrock_cape" }, img))
                 skin.capeIdentifier = id
+                println("Registered texture: $id")
             }
         }
     }

@@ -4,7 +4,6 @@ import com.brandonitaly.bedrockskins.client.SkinManager;
 import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.network.PlayerListEntry;
-import net.minecraft.entity.player.SkinTextures;
 import net.minecraft.util.AssetInfo;
 import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,14 +12,25 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+//? if <1.21.11 {
+/*import net.minecraft.client.util.SkinTextures;*/
+//?} else {
+import net.minecraft.entity.player.SkinTextures;
+//?}
+
 @Mixin(PlayerListEntry.class)
 public abstract class MixinPlayerListEntry {
 
     @Shadow
     public abstract GameProfile getProfile();
 
+    //? if <1.21.11 {
+    /*@Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
+    private void onGetSkinTextures(CallbackInfoReturnable<SkinTextures> cir) {*/
+    //?} else {
     @Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
     private void onGetSkinTextures(CallbackInfoReturnable<SkinTextures> cir) {
+    //?}
         GameProfile profile = getProfile();
         java.util.UUID id = null;
         try {
@@ -48,17 +58,26 @@ public abstract class MixinPlayerListEntry {
         if (loadedSkin.capeIdentifier != null) {
             SkinTextures original = cir.getReturnValue();
             Identifier capeId = loadedSkin.capeIdentifier;
-
-            // Create AssetInfo.TextureAsset for the cape
-            AssetInfo.TextureAsset capeAsset = new AssetInfo.TextureAssetInfo(capeId, capeId);
-
-            // Preserve original elytra texture:
-            // If explicit elytra exists, use it.
-            // If not, check if a cape existed (which would have been used as elytra).
-            // If neither, use the default elytra texture to prevent the Bedrock cape from being used as elytra.
+            
+            // Define default Elytra ID
             Identifier defaultElytraId = Identifier.of("minecraft", "textures/entity/equipment/wings/elytra.png");
-            AssetInfo.TextureAsset defaultElytraAsset = new AssetInfo.TextureAssetInfo(defaultElytraId, defaultElytraId);
 
+            //? if <1.21.11 {
+            /*Identifier elytraId = original.elytraTexture() != null ? original.elytraTexture() : (original.capeTexture() != null ? original.capeTexture() : defaultElytraId);
+
+            SkinTextures newTextures = new SkinTextures(
+                original.texture(),
+                original.textureUrl(),
+                capeId,
+                elytraId,
+                original.model(),
+                original.secure()
+            );
+            cir.setReturnValue(newTextures);*/
+            //?} else {
+            AssetInfo.TextureAsset capeAsset = new AssetInfo.TextureAssetInfo(capeId, capeId);
+            AssetInfo.TextureAsset defaultElytraAsset = new AssetInfo.TextureAssetInfo(defaultElytraId, defaultElytraId);
+            
             AssetInfo.TextureAsset elytraAsset = original.elytra() != null ? original.elytra() : (original.cape() != null ? original.cape() : defaultElytraAsset);
 
             SkinTextures newTextures = new SkinTextures(
@@ -69,6 +88,7 @@ public abstract class MixinPlayerListEntry {
                 original.secure()
             );
             cir.setReturnValue(newTextures);
+            //?}
         }
     }
 }
