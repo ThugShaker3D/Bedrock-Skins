@@ -9,301 +9,293 @@ import com.brandonitaly.bedrockskins.pack.LoadedSkin;
 import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
 import com.mojang.authlib.GameProfile;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
-import java.awt.Desktop;
 import java.io.File;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.util.*;
 
 public class SkinSelectionScreen extends Screen {
 
-    // UI State
+    // --- Visual Constants ---
+    private static final int PANEL_HEADER_HEIGHT = 24;
+    private static final int PANEL_PADDING = 4;
+    
+    // Modern Dark Theme Colors (ARGB)
+    private static final int COL_BG_GRADIENT_TOP = 0xC0101010;
+    private static final int COL_BG_GRADIENT_BOT = 0xD0000000;
+    private static final int COL_PANEL_BG = 0xE6181818; // High opacity dark gray
+    private static final int COL_PANEL_HEADER = 0xFF252525;
+    private static final int COL_BORDER_OUTER = 0xFF000000;
+    private static final int COL_BORDER_INNER = 0xFF383838;
+    private static final int COL_TEXT_TITLE = 0xFFFFFFFF;
+    private static final int COL_TEXT_SEC = 0xFFAAAAAA;
+
+    // --- Widgets & State ---
     private SkinPackListWidget packList;
     private SkinGridWidget skinGrid;
-    private ButtonWidget favoriteButton;
-    private String selectedPack;
+    private Button favoriteButton;
+    
+    private String selectedPackId;
     private LoadedSkin selectedSkin;
 
-    // Preview State
+    // Preview
     private PreviewPlayer dummyPlayer;
     private UUID dummyUuid = UUID.randomUUID();
-
-    // Design Constants
-    private static final int PANEL_HEADER_HEIGHT = 20;
-    private static final int PANEL_BG_COLOR = 0xD0101010; // Dark, high opacity
-    private static final int PANEL_HEADER_COLOR = 0xFF202020; // Slightly lighter
-    private static final int BORDER_COLOR = 0xFF404040; // Subtle gray
-    private static final int TITLE_COLOR = 0xFFFFFFFF;
+    
+    // Optimization: Cache skins by pack ID to avoid O(N) lookup on every click
+    private final Map<String, List<LoadedSkin>> skinCache = new HashMap<>();
 
     // Layout
-    private static final class Rect {
-        int x, y, w, h;
-
-        Rect(int x, int y, int w, int h) {
-            this.x = x;
-            this.y = y;
-            this.w = w;
-            this.h = h;
-        }
-
-        int cx() { return x + w / 2; }
-        int cy() { return y + h / 2; }
-    }
-
-    private Rect packBounds = new Rect(0, 0, 0, 0);
-    private Rect skinBounds = new Rect(0, 0, 0, 0);
-    private Rect previewBounds = new Rect(0, 0, 0, 0);
+    private final Rect rPacks = new Rect();
+    private final Rect rSkins = new Rect();
+    private final Rect rPreview = new Rect();
 
     public SkinSelectionScreen(Screen parent) {
-        super(Text.translatable("bedrockskins.gui.title"));
+        super(Component.translatable("bedrockskins.gui.title"));
     }
 
     @Override
     protected void init() {
         super.init();
         FavoritesManager.load();
+        
+        // 1. Build optimized cache
+        buildSkinCache();
 
-        setupLayout();
-        setupWidgets();
+        // 2. Compute dynamic layout
+        calculateLayout();
 
-        String currentKey = SkinManager.getLocalSelectedKey();
-        Object currentPlayer = client.player;
-
-        if (currentKey != null && !currentKey.isEmpty()) {
-            updatePreviewModel(UUID.randomUUID(), currentKey);
-        } else if (currentPlayer != null) {
-            // Try to get the player's UUID reflectively across mappings
-            try {
-                java.lang.reflect.Method gm = currentPlayer.getClass().getMethod("getUuid");
-                UUID uuid = (UUID) gm.invoke(currentPlayer);
-                updatePreviewModel(uuid, null);
-            } catch (Exception e) {
-                try {
-                    java.lang.reflect.Field f = currentPlayer.getClass().getField("uuid");
-                    UUID uuid = (UUID) f.get(currentPlayer);
-                    updatePreviewModel(uuid, null);
-                } catch (Exception ignored) {
-                    updatePreviewModel(UUID.randomUUID(), null);
-                }
-            }
-        } else {
-            updatePreviewModel(UUID.randomUUID(), null);
+        // 3. Initialize UI components
+        initWidgets();
+        
+        // 4. Setup preview entity
+        initPreviewState();
+    }
+    
+    /**
+     * Optimization: Groups all loaded skins by their Pack ID into a map.
+     * This makes switching packs instantaneous.
+     */
+    private void buildSkinCache() {
+        skinCache.clear();
+        
+        // Group standard skins
+        for (LoadedSkin skin : SkinPackLoader.loadedSkins.values()) {
+            skinCache.computeIfAbsent(skin.getId(), k -> new ArrayList<>()).add(skin);
         }
-
-        refreshPackList();
+        
+        // Build Favorites list
+        List<LoadedSkin> favs = new ArrayList<>();
+        for (String key : FavoritesManager.getFavoriteKeys()) {
+            LoadedSkin s = SkinPackLoader.loadedSkins.get(key);
+            if (s != null) favs.add(s);
+        }
+        skinCache.put("skinpack.Favorites", favs);
     }
 
-    private void setupLayout() {
-        int topMargin = 40; // Space for Main Title
-        int bottomMargin = 40; // Space for Footer
-        int sideMargin = 15;
-        int gap = 8;
-
-        int availableHeight = this.height - topMargin - bottomMargin;
-        int availableWidth = this.width - (sideMargin * 2);
-
-        // Requirements: 
-        // 1. Pack List (Left) and Preview Panel (Right) MUST be same size.
-        // 2. Skins Panel (Center) takes remaining space (effectively centered).
+    private void calculateLayout() {
+        int topNav = 32;
+        int botNav = 32;
+        int hMargin = 10;
+        int gap = 6;
         
-        // Set side panels to roughly 25% width each
-        int sidePanelWidth = (int) (availableWidth * 0.25);
+        int fullW = this.width - (hMargin * 2);
+        int fullH = this.height - topNav - botNav;
         
-        // Enforce limits to ensure panels remain usable
-        sidePanelWidth = Math.max(sidePanelWidth, 130); // Min width to fit buttons
-        sidePanelWidth = Math.min(sidePanelWidth, 220); // Max width prevents sides from dominating
-
-        // Calculate center width based on remaining space
-        int centerPanelWidth = availableWidth - (sidePanelWidth * 2) - (gap * 2);
+        // Responsive Layout: 
+        // Side panels get 22% of width, clamped between 130px and 200px.
+        // Center panel takes the rest.
+        int sideW = Math.max(130, Math.min(200, (int)(fullW * 0.22)));
+        int centerW = fullW - (sideW * 2) - (gap * 2);
         
-        // Safety fallback: if center gets too small on very narrow screens, shrink sides equally
-        if (centerPanelWidth < 100) {
-            sidePanelWidth = (availableWidth - (gap * 2) - 100) / 2;
-            centerPanelWidth = availableWidth - (sidePanelWidth * 2) - (gap * 2);
+        // Safety for extremely small windows
+        if (centerW < 100) {
+            sideW = (fullW - 100 - (gap * 2)) / 2;
+            centerW = 100;
         }
 
-        packBounds = new Rect(sideMargin, topMargin, sidePanelWidth, availableHeight);
-        skinBounds = new Rect(packBounds.x + packBounds.w + gap, topMargin, centerPanelWidth, availableHeight);
-        previewBounds = new Rect(skinBounds.x + skinBounds.w + gap, topMargin, sidePanelWidth, availableHeight);
+        rPacks.set(hMargin, topNav, sideW, fullH);
+        rSkins.set(rPacks.right() + gap, topNav, centerW, fullH);
+        rPreview.set(rSkins.right() + gap, topNav, sideW, fullH);
     }
 
-    private void setupWidgets() {
-        MinecraftClient mc = this.client;
-        if (mc == null) return;
+    private void initWidgets() {
+        if (minecraft == null) return;
 
-        // Pack List
-        // Offset Y and Height to account for the panel header
-        int listY = packBounds.y + PANEL_HEADER_HEIGHT + 2;
-        int listH = packBounds.h - PANEL_HEADER_HEIGHT - 4;
+        // -- Pack List --
+        int plY = rPacks.y + PANEL_HEADER_HEIGHT + PANEL_PADDING;
+        int plH = rPacks.h - PANEL_HEADER_HEIGHT - (PANEL_PADDING * 2);
         
-        packList = new SkinPackListWidget(mc, packBounds.w - 4, listH, listY, 24,
+        packList = new SkinPackListWidget(minecraft, rPacks.w - (PANEL_PADDING * 2), plH, plY, 24,
                 this::selectPack,
-                id -> Objects.equals(selectedPack, id),
-                textRenderer);
-        setWidgetLeft(packList, packBounds.x + 2, listY);
-        addDrawableChild(packList);
+                id -> Objects.equals(selectedPackId, id),
+                font);
+        ReflectionHelper.setPos(packList, rPacks.x + PANEL_PADDING, plY);
+        addRenderableWidget(packList);
 
-        // Skin Grid
-        // Offset Y and Height to account for the panel header
-        int gridY = skinBounds.y + PANEL_HEADER_HEIGHT + 2;
-        int gridH = skinBounds.h - PANEL_HEADER_HEIGHT - 4;
-
-        skinGrid = new SkinGridWidget(mc, skinBounds.w - 4, gridH, gridY, 90,
+        // -- Skin Grid --
+        int sgY = rSkins.y + PANEL_HEADER_HEIGHT + PANEL_PADDING;
+        int sgH = rSkins.h - PANEL_HEADER_HEIGHT - (PANEL_PADDING * 2);
+        
+        skinGrid = new SkinGridWidget(minecraft, rSkins.w - (PANEL_PADDING * 2), sgH, sgY, 90,
                 this::selectSkin,
                 () -> selectedSkin,
-                textRenderer,
+                font,
                 this::safeRegisterTexture,
                 SkinManager::setPreviewSkin,
                 this::safeResetPreview);
-        setWidgetLeft(skinGrid, skinBounds.x + 2, gridY);
-        addDrawableChild(skinGrid);
+        ReflectionHelper.setPos(skinGrid, rSkins.x + PANEL_PADDING, sgY);
+        addRenderableWidget(skinGrid);
 
-        setupButtons();
+        // -- Buttons --
+        initPreviewButtons();
+        initFooterButtons();
+        
+        // Load initial data
+        refreshPackList();
+
+        // FIX: Restore the grid content if a pack was previously selected.
+        // On resize, init() is called again, creating a new empty skinGrid. 
+        // We must manually refill it with the currently selected pack.
+        if (selectedPackId != null) {
+            selectPack(selectedPackId);
+        }
     }
-
-    private void setupButtons() {
-        // Preview Panel Buttons
-        int btnW = Math.min(previewBounds.w - 16, 150);
-        int btnX = previewBounds.cx() - btnW / 2;
-        int startY = previewBounds.y + previewBounds.h - 26;
-
-        addDrawableChild(ButtonWidget.builder(Text.translatable("bedrockskins.button.reset"), b -> resetSkin())
-                .dimensions(btnX, startY, btnW, 20).build());
-
-        startY -= 24;
-        addDrawableChild(ButtonWidget.builder(Text.translatable("bedrockskins.button.select"), b -> applySkin())
-                .dimensions(btnX, startY, btnW, 20).build());
-
-        startY -= 24;
-        favoriteButton = ButtonWidget.builder(Text.translatable("bedrockskins.button.favorite"), b -> toggleFavorite())
-                .dimensions(btnX, startY, btnW, 20).build();
+    
+    private void initPreviewButtons() {
+        int btnW = Math.min(rPreview.w - 16, 140);
+        int btnH = 20;
+        int btnX = rPreview.centerX() - (btnW / 2);
+        int startY = rPreview.bottom() - PANEL_PADDING - btnH - 4;
+        
+        addRenderableWidget(Button.builder(Component.translatable("bedrockskins.button.reset"), b -> resetSkin())
+                .bounds(btnX, startY, btnW, btnH).build());
+        startY -= (btnH + 4);
+        
+        addRenderableWidget(Button.builder(Component.translatable("bedrockskins.button.select"), b -> applySkin())
+                .bounds(btnX, startY, btnW, btnH).build());
+        startY -= (btnH + 4);
+        
+        favoriteButton = Button.builder(Component.translatable("bedrockskins.button.favorite"), b -> toggleFavorite())
+                .bounds(btnX, startY, btnW, btnH).build();
         favoriteButton.active = false;
-        addDrawableChild(favoriteButton);
-
-        // Footer Buttons (Open Packs / Done)
-        // Matching exact positioning from original Kotlin implementation
-        int footW = 150;
-        int footGap = 8;
-        int footY = this.height - 28;
-        int totalFootW = (footW * 2) + footGap;
-        // Calculation: width / 2 - (footW * 2 + footGap) / 2
-        int footX = (this.width / 2) - (totalFootW / 2);
-
-        addDrawableChild(ButtonWidget.builder(Text.translatable("bedrockskins.button.open_packs"), b -> openSkinPacksFolder())
-                .dimensions(footX, footY, footW, 20).build());
-
-        addDrawableChild(ButtonWidget.builder(Text.translatable("gui.done"), b -> close())
-                .dimensions(footX + footW + footGap, footY, footW, 20).build());
+        addRenderableWidget(favoriteButton);
     }
 
-    /**
-     * Set the left position of a widget using multiple fallbacks so it works across mappings.
-     */
-    private void setWidgetLeft(Object widget, int left, int top) {
-        try {
-            try {
-                java.lang.reflect.Method m = widget.getClass().getMethod("setLeftPos", int.class);
-                m.invoke(widget, left);
-                try { java.lang.reflect.Method my = widget.getClass().getMethod("setTopPos", int.class); my.invoke(widget, top); } catch (Exception ignored) {}
-                return;
-            } catch (NoSuchMethodException ignored) {}
+    private void initFooterButtons() {
+        int btnW = 150;
+        int gap = 10;
+        int y = this.height - 24;
+        int centerX = this.width / 2;
+        
+        addRenderableWidget(Button.builder(Component.translatable("bedrockskins.button.open_packs"), b -> openSkinPacksFolder())
+                .bounds(centerX - btnW - (gap/2), y, btnW, 20).build());
+        
+        addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
+                .bounds(centerX + (gap/2), y, btnW, 20).build());
+    }
 
-            try {
-                java.lang.reflect.Method m = widget.getClass().getMethod("setX", int.class);
-                m.invoke(widget, left);
-                try { java.lang.reflect.Method my = widget.getClass().getMethod("setY", int.class); my.invoke(widget, top); } catch (Exception ignored) {}
-                return;
-            } catch (NoSuchMethodException ignored) {}
-
-            try {
-                java.lang.reflect.Method m = widget.getClass().getMethod("setLeft", int.class);
-                m.invoke(widget, left);
-                return;
-            } catch (NoSuchMethodException ignored) {}
-
-            try {
-                java.lang.reflect.Method m = widget.getClass().getMethod("setPosition", int.class, int.class);
-                m.invoke(widget, left, top);
-                return;
-            } catch (NoSuchMethodException ignored) {}
-
-            // Last resort: write to field named "x"
-            try {
-                java.lang.reflect.Field f = widget.getClass().getDeclaredField("x");
-                f.setAccessible(true);
-                f.setInt(widget, left);
-            } catch (Exception ignored) {}
-        } catch (Exception e) {
-            // best-effort: ignore
+    private void initPreviewState() {
+        // Fix: If a skin is currently selected (e.g. during a window resize), preserve the preview for it.
+        // This prevents the preview from reverting to the player's actual skin on resize.
+        if (this.selectedSkin != null) {
+            updatePreviewModel(this.dummyUuid, this.selectedSkin.getKey());
+            return;
         }
-    }
 
-    // --- Logic & State Management ---
-
-    private void updatePreviewModel(UUID uuid, String skinKey) {
-        ClientWorld world = client.world;
-        if (world == null) return;
-
-        // Cleanup old
-        safeResetPreview(dummyUuid.toString());
-        dummyUuid = uuid;
-
-        if (skinKey != null) {
-            String[] parts = skinKey.split(":", 2);
-            if (parts.length == 2) {
-                SkinManager.setPreviewSkin(uuid.toString(), parts[0], parts[1]);
-                safeRegisterTexture(skinKey);
+        String currentKey = SkinManager.getLocalSelectedKey();
+        
+        // Logic: If the player has a custom skin set, use a dummy UUID to show it.
+        // If they have no custom skin (vanilla), use their real UUID so the preview shows their actual current skin.
+        if (currentKey != null && !currentKey.isEmpty()) {
+            this.dummyUuid = UUID.randomUUID();
+            updatePreviewModel(dummyUuid, currentKey);
+        } else {
+            if (minecraft.player != null) {
+                this.dummyUuid = minecraft.player.getUUID();
+            } else {
+                this.dummyUuid = UUID.randomUUID();
             }
+            // Passing null here ensures we don't override the texture, 
+            // allowing the entity to render with its natural skin properties
+            updatePreviewModel(dummyUuid, null);
+        }
+    }
+
+    // --- Application Logic ---
+
+    private void refreshPackList() {
+        if (packList == null) return;
+        packList.clear();
+
+        // Sort Packs: Favorites -> Defined Order -> Alphabetical
+        List<String> sortedPacks = new ArrayList<>(skinCache.keySet());
+        sortedPacks.remove("skinpack.Favorites"); 
+        
+        sortedPacks.sort((k1, k2) -> {
+            int i1 = SkinPackLoader.packOrder.indexOf(k1);
+            int i2 = SkinPackLoader.packOrder.indexOf(k2);
+            if (i1 != -1 && i2 != -1) return Integer.compare(i1, i2);
+            if (i1 != -1) return -1;
+            if (i2 != -1) return 1;
+            return k1.compareToIgnoreCase(k2);
+        });
+
+        if (!FavoritesManager.getFavoriteKeys().isEmpty()) {
+            sortedPacks.add(0, "skinpack.Favorites");
         }
 
-        String name = client.player != null ? client.player.getName().getString() : "Preview";
-        GameProfile profile = new GameProfile(uuid, name);
-        // Using the static inner class imported from PreviewPlayer
-        dummyPlayer = PreviewPlayer.PreviewPlayerPool.get(world, profile);
+        for (String pid : sortedPacks) {
+            String display = pid;
+            String internal = pid;
+            
+            // Resolve display name from cache (faster than searching all skins)
+            List<LoadedSkin> skins = skinCache.get(pid);
+            if (skins != null && !skins.isEmpty()) {
+                LoadedSkin first = skins.get(0);
+                display = first.getSafePackName();
+                internal = first.getPackDisplayName();
+            }
+            
+            if ("skinpack.Favorites".equals(pid)) {
+                display = "Favorites";
+                internal = "Favorites";
+            }
+
+            packList.addEntryPublic(new SkinPackListWidget.SkinPackEntry(
+                    pid, display, internal,
+                    this::selectPack,
+                    () -> Objects.equals(selectedPackId, pid),
+                    font
+            ));
+        }
     }
 
     private void selectPack(String packId) {
-        selectedPack = packId;
+        this.selectedPackId = packId;
         if (skinGrid != null) {
             skinGrid.clear();
-            skinGrid.setScrollY(0.0);
+            skinGrid.setScrollAmount(0.0);
         }
 
-        // Logic to preserve order from skins.json:
-        // We iterate the main collection and filter. We do NOT use stream().collect() blindly
-        // because it might not respect insertion order depending on Java version/implementation.
-        List<LoadedSkin> targetSkins = new ArrayList<>();
-
-        if ("skinpack.Favorites".equals(packId)) {
-            // Favorites order is determined by the FavoritesManager list order
-            List<String> favKeys = FavoritesManager.getFavoriteKeys();
-            for (String key : favKeys) {
-                LoadedSkin skin = SkinPackLoader.loadedSkins.get(key);
-                if (skin != null) targetSkins.add(skin);
-            }
-        } else {
-            // Normal pack: Iterate the values of the Map.
-            // Requirement: SkinPackLoader.loadedSkins MUST be a LinkedHashMap for this to work perfectly.
-            Collection<LoadedSkin> allSkins = SkinPackLoader.loadedSkins.values();
-            for (LoadedSkin skin : allSkins) {
-                if (Objects.equals(skin.getId(), packId)) {
-                    targetSkins.add(skin);
-                }
-            }
-        }
-
-        int cols = Math.max(1, (skinBounds.w - 20) / 65);
-        for (int i = 0; i < targetSkins.size(); i += cols) {
-            List<LoadedSkin> row = targetSkins.subList(i, Math.min(i + cols, targetSkins.size()));
+        List<LoadedSkin> skins = skinCache.getOrDefault(packId, Collections.emptyList());
+        
+        // Responsive columns based on actual width
+        int itemWidth = 65;
+        int totalWidth = rSkins.w - (PANEL_PADDING * 2) - 10;
+        int cols = Math.max(1, totalWidth / itemWidth);
+        
+        for (int i = 0; i < skins.size(); i += cols) {
+            List<LoadedSkin> row = skins.subList(i, Math.min(i + cols, skins.size()));
             skinGrid.addSkinsRow(row);
         }
     }
@@ -311,163 +303,143 @@ public class SkinSelectionScreen extends Screen {
     private void selectSkin(LoadedSkin skin) {
         this.selectedSkin = skin;
         updateFavoriteButton();
-        if (skin != null && !skin.getKey().isEmpty()) {
-            updatePreviewModel(UUID.randomUUID(), skin.getKey());
+        if (skin != null) {
+            // Detach from real player UUID if we are currently using it.
+            // This ensures we don't apply the preview texture to the real player entity.
+            if (minecraft.player != null && this.dummyUuid.equals(minecraft.player.getUUID())) {
+                // Reset the override on the real player before switching
+                safeResetPreview(this.dummyUuid.toString());
+                this.dummyUuid = UUID.randomUUID();
+            }
+            updatePreviewModel(dummyUuid, skin.getKey());
         }
     }
 
+    private void updatePreviewModel(UUID uuid, String skinKey) {
+        if (minecraft.level == null) return;
+        
+        // Clean up previous preview state
+        if (!this.dummyUuid.equals(uuid)) {
+            safeResetPreview(this.dummyUuid.toString());
+        }
+        
+        this.dummyUuid = uuid;
+        
+        if (skinKey != null) {
+            String[] parts = skinKey.split(":", 2);
+            if (parts.length == 2) {
+                SkinManager.setPreviewSkin(uuid.toString(), parts[0], parts[1]);
+                safeRegisterTexture(skinKey);
+            }
+        }
+        
+        String name = minecraft.player != null ? minecraft.player.getName().getString() : "Preview";
+        GameProfile profile = new GameProfile(uuid, name);
+        dummyPlayer = PreviewPlayer.PreviewPlayerPool.get(minecraft.level, profile);
+    }
+    
     private void applySkin() {
-        LoadedSkin skin = this.selectedSkin;
-        if (skin == null || skin.getKey().isEmpty()) return;
+        if (selectedSkin == null) return;
         try {
-            byte[] textureData = loadTextureData(skin);
-            String[] parts = skin.getKey().split(":", 2);
+            byte[] data = loadTextureData(selectedSkin);
+            String key = selectedSkin.getKey();
+            String[] parts = key.split(":", 2);
             String pack = parts.length == 2 ? parts[0] : "Remote";
-            String name = parts.length == 2 ? parts[1] : skin.getKey();
-
-            safeRegisterTexture(skin.getKey());
-
-            if (client.player != null) {
-                SkinManager.setSkin(client.player.getUuid().toString(), pack, name);
-                if (textureData.length > 0) {
-                    ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(skin.getKey(), skin.getGeometryData().toString(), textureData));
+            String name = parts.length == 2 ? parts[1] : key;
+            
+            safeRegisterTexture(key);
+            
+            if (minecraft.player != null) {
+                SkinManager.setSkin(minecraft.player.getUUID().toString(), pack, name);
+                if (data.length > 0) {
+                    ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(
+                        key, selectedSkin.getGeometryData().toString(), data
+                    ));
                 }
-                String tName = SkinPackLoader.getTranslation(skin.getSafeSkinName());
-                if (tName == null) tName = skin.getSkinDisplayName();
-                client.player.sendMessage(Text.translatable("bedrockskins.message.set_skin", tName).formatted(Formatting.GREEN), true);
+                
+                String dispName = SkinPackLoader.getTranslation(selectedSkin.getSafeSkinName());
+                if (dispName == null) dispName = selectedSkin.getSkinDisplayName();
+                
+                minecraft.player.displayClientMessage(
+                    Component.translatable("bedrockskins.message.set_skin", dispName).withStyle(ChatFormatting.GREEN), 
+                    true
+                );
             } else {
-                StateManager.saveState(FavoritesManager.getFavoriteKeys(), skin.getKey());
-                updatePreviewModel(dummyUuid, skin.getKey());
+                StateManager.saveState(FavoritesManager.getFavoriteKeys(), key);
+                updatePreviewModel(dummyUuid, key);
             }
         } catch (Exception e) {
             e.printStackTrace();
-            if (client.player != null)
-                client.player.sendMessage(Text.literal("Error: " + e.getMessage()).formatted(Formatting.RED), false);
         }
     }
-
+    
     private void resetSkin() {
         selectedSkin = null;
-        if (client.player != null) {
-            SkinManager.resetSkin(client.player.getUuid().toString());
+        if (minecraft.player != null) {
+            SkinManager.resetSkin(minecraft.player.getUUID().toString());
             ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0]));
-            client.player.sendMessage(Text.translatable("bedrockskins.message.reset_default").formatted(Formatting.YELLOW), true);
-            updatePreviewModel(client.player.getUuid(), null);
+            minecraft.player.displayClientMessage(Component.translatable("bedrockskins.message.reset_default").withStyle(ChatFormatting.YELLOW), true);
+            
+            // Revert preview to the actual player UUID to show vanilla skin
+            safeResetPreview(this.dummyUuid.toString());
+            this.dummyUuid = minecraft.player.getUUID();
+            updatePreviewModel(this.dummyUuid, null);
         } else {
             StateManager.saveState(FavoritesManager.getFavoriteKeys(), null);
             safeResetPreview(dummyUuid.toString());
         }
+        updateFavoriteButton();
+    }
+    
+    private void toggleFavorite() {
+        if (selectedSkin == null) return;
+        if (FavoritesManager.isFavorite(selectedSkin)) FavoritesManager.removeFavorite(selectedSkin);
+        else FavoritesManager.addFavorite(selectedSkin);
+        
+        // Refresh cache specifically for favorites pack
+        List<LoadedSkin> favs = new ArrayList<>();
+        for (String key : FavoritesManager.getFavoriteKeys()) {
+            LoadedSkin s = SkinPackLoader.loadedSkins.get(key);
+            if (s != null) favs.add(s);
+        }
+        skinCache.put("skinpack.Favorites", favs);
+        
+        updateFavoriteButton();
+        refreshPackList();
+        
+        if ("skinpack.Favorites".equals(selectedPackId)) selectPack("skinpack.Favorites");
+    }
+    
+    private void updateFavoriteButton() {
+        if (favoriteButton == null) return;
+        favoriteButton.active = selectedSkin != null;
+        boolean isFav = selectedSkin != null && FavoritesManager.isFavorite(selectedSkin);
+        favoriteButton.setMessage(Component.translatable(isFav ? "bedrockskins.button.unfavorite" : "bedrockskins.button.favorite"));
     }
 
     // --- Helpers ---
 
-    private void refreshPackList() {
-        if (packList == null) return;
-        packList.clear();
-
-        // Group skins by Pack ID to find available packs
-        // We use a temporary map, but we will sort the keys afterwards using packOrder
-        Set<String> packIds = new HashSet<>();
-        for (LoadedSkin s : SkinPackLoader.loadedSkins.values()) {
-            packIds.add(s.getId());
-        }
-
-        List<String> sortedPacks = new ArrayList<>(packIds);
-
-        // Custom Sort: Favorites first, then defined order, then alphabetical
-        sortedPacks.sort((k1, k2) -> {
-            int i1 = SkinPackLoader.packOrder.indexOf(k1);
-            int i2 = SkinPackLoader.packOrder.indexOf(k2);
-            if (i1 != -1 && i2 != -1) return Integer.compare(i1, i2);
-            if (i1 != -1) return -1;
-            if (i2 != -1) return 1;
-            return k1.compareTo(k2);
-        });
-
-        // Add Favorites at the very top if it exists
-        if (!FavoritesManager.getFavoriteKeys().isEmpty()) {
-            sortedPacks.add(0, "skinpack.Favorites");
-        }
-
-        for (String pid : sortedPacks) {
-            String displayName = pid;
-            String internalName = pid;
-
-            if ("skinpack.Favorites".equals(pid)) {
-                displayName = "Favorites";
-                internalName = "Favorites";
-            } else {
-                // Find first skin in this pack to get the pack's display name
-                // Again, iterating values implies relying on LinkedHashMap for speed,
-                // but for finding *one* match, any order is fine.
-                for (LoadedSkin s : SkinPackLoader.loadedSkins.values()) {
-                    if (Objects.equals(s.getId(), pid)) {
-                        displayName = s.getSafePackName();
-                        internalName = s.getPackDisplayName();
-                        break;
-                    }
-                }
-            }
-
-            packList.addEntryPublic(new SkinPackListWidget.SkinPackEntry(
-                    pid,
-                    displayName,
-                    internalName,
-                    this::selectPack,
-                    () -> Objects.equals(selectedPack, pid),
-                    textRenderer
-            ));
-        }
-    }
-
     private byte[] loadTextureData(LoadedSkin skin) {
         try {
             AssetSource src = skin.getTexture();
-            if (src instanceof AssetSource.Resource) {
-                var resOpt = client.getResourceManager().getResource(((AssetSource.Resource) src).getId());
-                if (resOpt.isPresent()) return resOpt.get().getInputStream().readAllBytes();
-                return new byte[0];
-            } else if (src instanceof AssetSource.File) {
-                File f = new File(((AssetSource.File) src).getPath());
-                return Files.readAllBytes(f.toPath());
-            } else {
-                return new byte[0];
+            if (src instanceof AssetSource.Resource res) {
+                var resOpt = minecraft.getResourceManager().getResource(res.getId());
+                if (resOpt.isPresent()) return resOpt.get().open().readAllBytes();
+            } else if (src instanceof AssetSource.File f) {
+                return Files.readAllBytes(new File(f.getPath()).toPath());
             }
-        } catch (Exception e) {
-            return new byte[0];
-        }
+        } catch (Exception ignored) {}
+        return new byte[0];
     }
-
-    private void toggleFavorite() {
-        if (selectedSkin != null) {
-            if (FavoritesManager.isFavorite(selectedSkin)) FavoritesManager.removeFavorite(selectedSkin);
-            else FavoritesManager.addFavorite(selectedSkin);
-            updateFavoriteButton();
-            refreshPackList();
-            if ("skinpack.Favorites".equals(selectedPack)) selectPack("skinpack.Favorites");
-        }
-    }
-
-    private void updateFavoriteButton() {
-        if (favoriteButton != null) favoriteButton.active = selectedSkin != null;
-        boolean isFav = selectedSkin != null && FavoritesManager.isFavorite(selectedSkin);
-        if (favoriteButton != null)
-            favoriteButton.setMessage(Text.translatable(isFav ? "bedrockskins.button.unfavorite" : "bedrockskins.button.favorite"));
-    }
-
+    
     private void openSkinPacksFolder() {
-        File dir = new File(client.runDirectory, "skin_packs");
+        File dir = new File(minecraft.gameDirectory, "skin_packs");
         if (!dir.exists()) dir.mkdirs();
-        try {
-            if (Desktop.isDesktopSupported()) Desktop.getDesktop().open(dir);
-            else Util.getOperatingSystem().open(dir);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        Util.getPlatform().openFile(dir);
     }
 
     private void safeRegisterTexture(String key) {
-        try { SkinPackLoader.registerTextureFor(key); } catch (Exception e) { e.printStackTrace(); }
+        try { SkinPackLoader.registerTextureFor(key); } catch (Exception ignored) {}
     }
 
     private void safeResetPreview(String uuid) {
@@ -477,58 +449,63 @@ public class SkinSelectionScreen extends Screen {
     // --- Rendering ---
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        // 2. Main Title centered at top
-        context.drawCenteredTextWithShadow(textRenderer, this.title, this.width / 2, 8, TITLE_COLOR);
+    public void render(GuiGraphics gui, int mouseX, int mouseY, float delta) {
+        // Title
+        gui.drawCenteredString(font, this.title, this.width / 2, 12, COL_TEXT_TITLE);
 
-        // 3. Draw Stylized Panels
-        drawPanel(context, packBounds, Text.translatable("bedrockskins.gui.packs"));
-        drawPanel(context, skinBounds, Text.translatable("bedrockskins.gui.skins"));
-        drawPanel(context, previewBounds, Text.translatable("bedrockskins.gui.preview"));
+        // Draw styled panels
+        drawPanel(gui, rPacks, Component.translatable("bedrockskins.gui.packs"));
+        drawPanel(gui, rSkins, Component.translatable("bedrockskins.gui.skins"));
+        drawPanel(gui, rPreview, Component.translatable("bedrockskins.gui.preview"));
 
-        // 4. Draw Widgets and Buttons
-        super.render(context, mouseX, mouseY, delta);
-
-        // 5. Draw Entity (Pops over backgrounds)
-        renderPreviewEntity(context, mouseX, mouseY);
-
-        // 6. Render Preview Skin Info (Drawn LAST to overlay the preview/entity)
+        // Render widgets (lists, buttons)
+        super.render(gui, mouseX, mouseY, delta);
+        
+        // Render 3D Entity
+        renderPreviewEntity(gui, mouseX, mouseY);
+        
+        // Render Skin Name
         if (selectedSkin != null) {
             String name = SkinPackLoader.getTranslation(selectedSkin.getSafeSkinName());
             if (name == null) name = selectedSkin.getSkinDisplayName();
-            // Draw skin name just below the preview header, overlaying the entity area if needed
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal(name), previewBounds.cx(), previewBounds.y + PANEL_HEADER_HEIGHT + 10, 0xFFAAAAAA);
+            
+            // Draw centered under the preview header
+            int textY = rPreview.y + PANEL_HEADER_HEIGHT + 6;
+            gui.drawCenteredString(font, name, rPreview.centerX(), textY, COL_TEXT_SEC);
         }
     }
-
-    private void drawPanel(DrawContext context, Rect r, Text title) {
-        // Main Background
-        context.fill(r.x, r.y, r.x + r.w, r.y + r.h, PANEL_BG_COLOR);
-
-        // Header Strip
-        context.fill(r.x, r.y, r.x + r.w, r.y + PANEL_HEADER_HEIGHT, PANEL_HEADER_COLOR);
+    
+    private void drawPanel(GuiGraphics gui, Rect r, Component title) {
+        // 1. Shadow border
+        gui.fill(r.x - 1, r.y - 1, r.right() + 1, r.bottom() + 1, COL_BORDER_OUTER);
         
-        // Header Separator Line
-        context.fill(r.x, r.y + PANEL_HEADER_HEIGHT, r.x + r.w, r.y + PANEL_HEADER_HEIGHT + 1, BORDER_COLOR);
-
-        // Outer Borders
-        context.fill(r.x, r.y, r.x + r.w, r.y + 1, BORDER_COLOR); // Top
-        context.fill(r.x, r.y + r.h - 1, r.x + r.w, r.y + r.h, BORDER_COLOR); // Bottom
-        context.fill(r.x, r.y + 1, r.x + 1, r.y + r.h - 1, BORDER_COLOR); // Left
-        context.fill(r.x + r.w - 1, r.y + 1, r.x + r.w, r.y + r.h - 1, BORDER_COLOR); // Right
-
-        // Header Title
-        context.drawCenteredTextWithShadow(textRenderer, title, r.cx(), r.y + 6, TITLE_COLOR);
+        // 2. Main Background
+        gui.fill(r.x, r.y, r.right(), r.bottom(), COL_PANEL_BG);
+        
+        // 3. Header Background
+        gui.fill(r.x, r.y, r.right(), r.y + PANEL_HEADER_HEIGHT, COL_PANEL_HEADER);
+        
+        // 4. Separator Line
+        gui.fill(r.x, r.y + PANEL_HEADER_HEIGHT, r.right(), r.y + PANEL_HEADER_HEIGHT + 1, COL_BORDER_INNER);
+        
+        // 5. Title
+        gui.drawCenteredString(font, title, r.centerX(), r.y + 8, COL_TEXT_TITLE);
+        
+        // 6. Inner Border (1px highlight/depth)
+        gui.fill(r.x, r.y, r.right(), r.y + 1, COL_BORDER_INNER); 
+        gui.fill(r.x, r.bottom() - 1, r.right(), r.bottom(), COL_BORDER_INNER); 
+        gui.fill(r.x, r.y, r.x + 1, r.bottom(), COL_BORDER_INNER); 
+        gui.fill(r.right() - 1, r.y, r.right(), r.bottom(), COL_BORDER_INNER);
     }
 
-    private void renderPreviewEntity(DrawContext context, int mouseX, int mouseY) {
+    private void renderPreviewEntity(GuiGraphics gui, int mouseX, int mouseY) {
         // Calculate rendering area within the panel (below the header)
-        int x = previewBounds.x;
-        int y = previewBounds.y + PANEL_HEADER_HEIGHT;
-        int w = previewBounds.w;
+        int x = rPreview.x;
+        int y = rPreview.y + PANEL_HEADER_HEIGHT;
+        int w = rPreview.w;
         // Adjust height to stop BEFORE the buttons area (bottom ~90px)
         int buttonsHeight = 90;
-        int h = previewBounds.h - PANEL_HEADER_HEIGHT - buttonsHeight;
+        int h = rPreview.h - PANEL_HEADER_HEIGHT - buttonsHeight;
 
         // Ensure we have a valid drawing area
         int availableHeight = Math.max(h, 50);
@@ -544,20 +521,87 @@ public class SkinSelectionScreen extends Screen {
         float adjustedMouseY = centerY + (mouseY - centerY) * sensitivity;
 
         if (dummyPlayer != null) {
-            dummyPlayer.age = (int)(net.minecraft.util.Util.getMeasuringTimeMs() / 50L);
-            InventoryScreen.drawEntity(
-                context, x + 5, y + 20, x + w - 5, y + availableHeight,
-                scale, 0.0625f, adjustedMouseX, adjustedMouseY, dummyPlayer
+            dummyPlayer.tickCount = (int)(Util.getMillis() / 50L);
+            InventoryScreen.renderEntityInInventoryFollowsMouse(
+                gui, 
+                x + 5, y + 20, x + w - 5, y + availableHeight,
+                scale, 0.0625f, 
+                adjustedMouseX, adjustedMouseY, 
+                dummyPlayer
             );
-        } else if (client.player == null) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.translatable("bedrockskins.preview.unavailable"), x + w / 2, y + availableHeight / 2, 0xFFAAAAAA);
+        } else {
+            // Calculate true visual center for the text
+            int textY = y + (availableHeight / 2) - (font.lineHeight / 2);
+            gui.drawCenteredString(font, Component.translatable("bedrockskins.preview.unavailable"), (int)centerX, textY, COL_TEXT_SEC);
         }
     }
 
-    @Override
-    public void close() {
-        if (skinGrid != null) skinGrid.clear();
-        safeResetPreview(dummyUuid.toString());
-        client.setScreen(null);
+    // --- Utility Classes ---
+
+    private static class Rect {
+        int x, y, w, h;
+        void set(int x, int y, int w, int h) { this.x = x; this.y = y; this.w = w; this.h = h; }
+        int right() { return x + w; }
+        int bottom() { return y + h; }
+        int centerX() { return x + (w / 2); }
+        int centerY() { return y + (h / 2); }
+    }
+    
+    /**
+     * Optimizes reflection calls by caching accessors and preferring standard
+     * Mojang mappings/Fabric accessors if available.
+     */
+    private static class ReflectionHelper {
+        private static Method setX, setY, setLeftPos, setTopPos, setPosition;
+
+        static void setPos(Object widget, int x, int y) {
+            // 1. Fast path: Modern standard widgets (Fabric/Mojang mappings 1.19.4+)
+            if (widget instanceof AbstractWidget aw) {
+                aw.setX(x);
+                aw.setY(y);
+                return;
+            }
+            
+            // 2. Slow path: Reflection fallback for obfuscated/custom widgets
+            try {
+                Class<?> clz = widget.getClass();
+                
+                // Try cached 'setPosition'
+                if (setPosition != null) { setPosition.invoke(widget, x, y); return; }
+                
+                // Try finding standard setX/setY
+                try {
+                    Method mx = clz.getMethod("setX", int.class);
+                    mx.invoke(widget, x);
+                    try { clz.getMethod("setY", int.class).invoke(widget, y); } catch(Exception ignored){}
+                    return;
+                } catch (Exception ignored) {}
+
+                // Try finding legacy setLeftPos
+                try {
+                    Method m = clz.getMethod("setLeftPos", int.class);
+                    setLeftPos = m;
+                    m.invoke(widget, x);
+                    try { clz.getMethod("setTopPos", int.class).invoke(widget, y); } catch(Exception ignored){}
+                    return;
+                } catch (Exception ignored) {}
+                
+                // Try finding setPosition
+                try {
+                    Method m = clz.getMethod("setPosition", int.class, int.class);
+                    setPosition = m;
+                    m.invoke(widget, x, y);
+                } catch (Exception ignored) {}
+
+            } catch (Exception ignored) {
+                // 3. Last Resort: Direct field access
+                try {
+                    var fx = widget.getClass().getField("x");
+                    fx.setAccessible(true); fx.setInt(widget, x);
+                    var fy = widget.getClass().getField("y");
+                    fy.setAccessible(true); fy.setInt(widget, y);
+                } catch (Exception e) { /* Give up */ }
+            }
+        }
     }
 }

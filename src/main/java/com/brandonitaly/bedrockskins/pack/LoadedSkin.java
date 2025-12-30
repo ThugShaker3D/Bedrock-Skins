@@ -1,7 +1,6 @@
 package com.brandonitaly.bedrockskins.pack;
 
 import com.google.gson.JsonObject;
-import net.minecraft.util.Identifier;
 
 public class LoadedSkin {
     public final String serializeName;
@@ -11,8 +10,8 @@ public class LoadedSkin {
     public final AssetSource texture;
     public final AssetSource cape; // nullable
 
-    public net.minecraft.util.Identifier identifier;
-    public net.minecraft.util.Identifier capeIdentifier;
+    public net.minecraft.resources.Identifier identifier;
+    public net.minecraft.resources.Identifier capeIdentifier;
 
     public LoadedSkin(String serializeName, String packDisplayName, String skinDisplayName, com.google.gson.JsonObject geometryData, AssetSource texture) {
         this(serializeName, packDisplayName, skinDisplayName, geometryData, texture, null);
@@ -43,7 +42,7 @@ public class LoadedSkin {
     public boolean isInternal() { return texture instanceof AssetSource.Resource; }
 
     // Backwards-compatible accessors used by generated mixins and original Kotlin code
-    public net.minecraft.util.Identifier getIdentifier() { return this.identifier; }
-    public net.minecraft.util.Identifier getCapeIdentifier() { return this.capeIdentifier; }
+    public net.minecraft.resources.Identifier getIdentifier() { return this.identifier; }
+    public net.minecraft.resources.Identifier getCapeIdentifier() { return this.capeIdentifier; }
 }
 

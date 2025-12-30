@@ -1,19 +1,18 @@
 package com.brandonitaly.bedrockskins.client;
 
 import com.google.gson.Gson;
-import net.minecraft.client.MinecraftClient;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.Collections;
 import java.util.List;
+import net.minecraft.client.Minecraft;
 
 public final class StateManager {
     private StateManager() {}
 
     private static final Gson gson = new Gson();
-    private static final File stateFile = new File(MinecraftClient.getInstance().runDirectory, "bedrock_skins_state.json");
+    private static final File stateFile = new File(Minecraft.getInstance().gameDirectory, "bedrock_skins_state.json");
 
     public static BedrockSkinsState readState() {
         try {

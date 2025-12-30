@@ -1,24 +1,23 @@
 package com.brandonitaly.bedrockskins;
 
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.Uuids;
-import net.minecraft.network.RegistryByteBuf;
-
 import java.util.Arrays;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
 public final class BedrockSkinsNetworking {
     private BedrockSkinsNetworking() {}
 
-    public static final class SkinUpdatePayload implements CustomPayload {
-        public static final CustomPayload.Id<SkinUpdatePayload> ID = new CustomPayload.Id<>(Identifier.of("bedrockskins", "skin_update"));
-        public static final PacketCodec<RegistryByteBuf, SkinUpdatePayload> CODEC = PacketCodec.tuple(
-            Uuids.PACKET_CODEC, SkinUpdatePayload::getUuid,
-            PacketCodecs.string(32767), SkinUpdatePayload::getSkinKey,
-            PacketCodecs.string(262144), SkinUpdatePayload::getGeometry,
-            PacketCodecs.byteArray(1048576), SkinUpdatePayload::getTextureData,
+    public static final class SkinUpdatePayload implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<SkinUpdatePayload> ID = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("bedrockskins", "skin_update"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, SkinUpdatePayload> CODEC = StreamCodec.composite(
+            UUIDUtil.STREAM_CODEC, SkinUpdatePayload::getUuid,
+            ByteBufCodecs.stringUtf8(32767), SkinUpdatePayload::getSkinKey,
+            ByteBufCodecs.stringUtf8(262144), SkinUpdatePayload::getGeometry,
+            ByteBufCodecs.byteArray(1048576), SkinUpdatePayload::getTextureData,
             SkinUpdatePayload::new
         );
 
@@ -35,7 +34,7 @@ public final class BedrockSkinsNetworking {
         }
 
         @Override
-        public CustomPayload.Id<?> getId() {
+        public CustomPacketPayload.Type<?> type() {
             return ID;
         }
 
@@ -65,12 +64,12 @@ public final class BedrockSkinsNetworking {
         }
     }
 
-    public static final class SetSkinPayload implements CustomPayload {
-        public static final CustomPayload.Id<SetSkinPayload> ID = new CustomPayload.Id<>(Identifier.of("bedrockskins", "set_skin"));
-        public static final PacketCodec<RegistryByteBuf, SetSkinPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.string(32767), SetSkinPayload::getSkinKey,
-            PacketCodecs.string(262144), SetSkinPayload::getGeometry,
-            PacketCodecs.byteArray(1048576), SetSkinPayload::getTextureData,
+    public static final class SetSkinPayload implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<SetSkinPayload> ID = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("bedrockskins", "set_skin"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, SetSkinPayload> CODEC = StreamCodec.composite(
+            ByteBufCodecs.stringUtf8(32767), SetSkinPayload::getSkinKey,
+            ByteBufCodecs.stringUtf8(262144), SetSkinPayload::getGeometry,
+            ByteBufCodecs.byteArray(1048576), SetSkinPayload::getTextureData,
             SetSkinPayload::new
         );
 
@@ -85,7 +84,7 @@ public final class BedrockSkinsNetworking {
         }
 
         @Override
-        public CustomPayload.Id<?> getId() { return ID; }
+        public CustomPacketPayload.Type<?> type() { return ID; }
 
         public String getSkinKey() { return skinKey; }
         public String getGeometry() { return geometry; }

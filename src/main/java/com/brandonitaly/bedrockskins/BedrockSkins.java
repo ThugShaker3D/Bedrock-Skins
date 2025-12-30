@@ -39,7 +39,7 @@ public class BedrockSkins implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(BedrockSkinsNetworking.SetSkinPayload.ID, (payload, context) -> {
             final String skinKey = payload.getSkinKey();
             final var player = context.player();
-            final UUID uuid = player.getUuid();
+            final UUID uuid = player.getUUID();
             final var server = context.server();
 
             final String geometry = payload.getGeometry();
@@ -92,7 +92,7 @@ public class BedrockSkins implements ModInitializer {
                 // Broadcast to all players
                 final BedrockSkinsNetworking.SkinUpdatePayload updatePayload = new BedrockSkinsNetworking.SkinUpdatePayload(uuid, skinKey, geometry, textureData);
 
-                server.getPlayerManager().getPlayerList().forEach(p -> ServerPlayNetworking.send(p, updatePayload));
+                server.getPlayerList().getPlayers().forEach(p -> ServerPlayNetworking.send(p, updatePayload));
             });
         });
     }

@@ -3,22 +3,17 @@ package com.brandonitaly.bedrockskins.mixins;
 import com.brandonitaly.bedrockskins.client.SkinManager;
 import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
 import com.mojang.authlib.GameProfile;
-import net.minecraft.client.network.PlayerListEntry;
-import net.minecraft.util.AssetInfo;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.core.ClientAsset;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.PlayerSkin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-//? if <=1.21.8 {
-/*import net.minecraft.client.util.SkinTextures;*/
-//?} else {
-import net.minecraft.entity.player.SkinTextures;
-//?}
-
-@Mixin(PlayerListEntry.class)
+@Mixin(PlayerInfo.class)
 public abstract class MixinPlayerListEntry {
 
     @Shadow
@@ -28,8 +23,8 @@ public abstract class MixinPlayerListEntry {
     /*@Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
     private void onGetSkinTextures(CallbackInfoReturnable<SkinTextures> cir) {*/
     //?} else {
-    @Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
-    private void onGetSkinTextures(CallbackInfoReturnable<SkinTextures> cir) {
+    @Inject(method = "getSkin", at = @At("RETURN"), cancellable = true)
+    private void onGetSkinTextures(CallbackInfoReturnable<PlayerSkin> cir) {
     //?}
         GameProfile profile = getProfile();
         java.util.UUID id = null;
@@ -56,11 +51,11 @@ public abstract class MixinPlayerListEntry {
         if (loadedSkin == null) return;
 
         if (loadedSkin.capeIdentifier != null) {
-            SkinTextures original = cir.getReturnValue();
+            PlayerSkin original = cir.getReturnValue();
             Identifier capeId = loadedSkin.capeIdentifier;
             
             // Define default Elytra ID
-            Identifier defaultElytraId = Identifier.of("minecraft", "textures/entity/equipment/wings/elytra.png");
+            Identifier defaultElytraId = Identifier.fromNamespaceAndPath("minecraft", "textures/entity/equipment/wings/elytra.png");
 
             //? if <=1.21.8 {
             /*Identifier elytraId = original.elytraTexture() != null ? original.elytraTexture() : (original.capeTexture() != null ? original.capeTexture() : defaultElytraId);
@@ -75,12 +70,12 @@ public abstract class MixinPlayerListEntry {
             );
             cir.setReturnValue(newTextures);*/
             //?} else {
-            AssetInfo.TextureAsset capeAsset = new AssetInfo.TextureAssetInfo(capeId, capeId);
-            AssetInfo.TextureAsset defaultElytraAsset = new AssetInfo.TextureAssetInfo(defaultElytraId, defaultElytraId);
+            ClientAsset.Texture capeAsset = new ClientAsset.ResourceTexture(capeId, capeId);
+            ClientAsset.Texture defaultElytraAsset = new ClientAsset.ResourceTexture(defaultElytraId, defaultElytraId);
             
-            AssetInfo.TextureAsset elytraAsset = original.elytra() != null ? original.elytra() : (original.cape() != null ? original.cape() : defaultElytraAsset);
+            ClientAsset.Texture elytraAsset = original.elytra() != null ? original.elytra() : (original.cape() != null ? original.cape() : defaultElytraAsset);
 
-            SkinTextures newTextures = new SkinTextures(
+            PlayerSkin newTextures = new PlayerSkin(
                 original.body(),
                 capeAsset,
                 elytraAsset,

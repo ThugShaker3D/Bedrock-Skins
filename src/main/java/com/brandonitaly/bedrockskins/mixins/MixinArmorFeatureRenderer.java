@@ -5,28 +5,22 @@ import com.brandonitaly.bedrockskins.client.BedrockPlayerModel;
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
 import com.brandonitaly.bedrockskins.client.SkinManager;
 import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.entity.feature.ArmorFeatureRenderer;
-import net.minecraft.client.render.entity.state.BipedEntityRenderState;
-import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.item.ItemStack;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.UUID;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
 
-//? if <=1.21.8 {
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.model.BipedEntityModel;
-//?} else {
-import net.minecraft.client.render.command.OrderedRenderCommandQueue;
-//?}
-
-@Mixin(ArmorFeatureRenderer.class)
+@Mixin(HumanoidArmorLayer.class)
 public abstract class MixinArmorFeatureRenderer {
 
     @Unique
@@ -66,11 +60,11 @@ public abstract class MixinArmorFeatureRenderer {
     @Unique
     private boolean bedrockSkins$hasCapeTexture(UUID uuid) {
         try {
-            var client = MinecraftClient.getInstance();
-            if (client == null || client.getNetworkHandler() == null) return false;
-            var entry = client.getNetworkHandler().getPlayerListEntry(uuid);
+            var client = Minecraft.getInstance();
+            if (client == null || client.getConnection() == null) return false;
+            var entry = client.getConnection().getPlayerInfo(uuid);
             if (entry == null) return false;
-            var textures = entry.getSkinTextures();
+            var textures = entry.getSkin();
             if (textures == null) return false;
 
             //? if <=1.21.8 {
@@ -88,7 +82,7 @@ public abstract class MixinArmorFeatureRenderer {
     }
 
     @Unique
-    private void bedrockSkins$applyArmorOffset(MatrixStack matrices, Object modelObj, ItemStack stack, EquipmentSlot slot) {
+    private void bedrockSkins$applyArmorOffset(PoseStack matrices, Object modelObj, ItemStack stack, EquipmentSlot slot) {
         if (!(modelObj instanceof BedrockPlayerModel bedrockModel)) return;
 
         // Hiding Logic
@@ -104,16 +98,16 @@ public abstract class MixinArmorFeatureRenderer {
         }
         
         if (pixels != 0f) {
-            matrices.push();
+            matrices.pushPose();
             matrices.translate(0.0, pixels * 0.0625f, 0.0);
             pushed.set(true);
         }
     }
 
     @Unique
-    private void bedrockSkins$resetMatrix(MatrixStack matrices) {
+    private void bedrockSkins$resetMatrix(PoseStack matrices) {
         if (Boolean.TRUE.equals(pushed.get())) {
-            try { matrices.pop(); } catch (Exception ignored) {}
+            try { matrices.popPose(); } catch (Exception ignored) {}
             pushed.remove();
         }
     }
@@ -140,24 +134,24 @@ public abstract class MixinArmorFeatureRenderer {
         bedrockSkins$resetMatrix(matrices);
     }*/
     //?} else {
-    @Inject(method = "render", at = @At("HEAD"))
-    private void onRenderHead(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, BipedEntityRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
+    @Inject(method = "submit", at = @At("HEAD"))
+    private void onRenderHead(PoseStack matrices, SubmitNodeCollector queue, int light, HumanoidRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
         UUID uuid = (state instanceof BedrockSkinState skinState) ? skinState.getUniqueId() : null;
-        boolean isPlayerState = state instanceof PlayerEntityRenderState;
-        boolean capeVisible = isPlayerState && ((PlayerEntityRenderState) state).capeVisible;
+        boolean isPlayerState = state instanceof AvatarRenderState;
+        boolean capeVisible = isPlayerState && ((AvatarRenderState) state).showCape;
         bedrockSkins$configureVisibility(uuid, isPlayerState, capeVisible);
     }
 
-    @Inject(method = "renderArmor", at = @At("HEAD"))
-    private void beforeRenderArmor(MatrixStack matrices, OrderedRenderCommandQueue queue, ItemStack stack, EquipmentSlot slot, int light, BipedEntityRenderState state, CallbackInfo ci) {
+    @Inject(method = "renderArmorPiece", at = @At("HEAD"))
+    private void beforeRenderArmor(PoseStack matrices, SubmitNodeCollector queue, ItemStack stack, EquipmentSlot slot, int light, HumanoidRenderState state, CallbackInfo ci) {
         // New version: derive model from state UUID
         UUID uuid = (state instanceof BedrockSkinState skinState) ? skinState.getUniqueId() : null;
         var model = (uuid != null) ? BedrockModelManager.getModel(uuid) : null;
         bedrockSkins$applyArmorOffset(matrices, model, stack, slot);
     }
 
-    @Inject(method = "renderArmor", at = @At("RETURN"))
-    private void afterRenderArmor(MatrixStack matrices, OrderedRenderCommandQueue queue, ItemStack stack, EquipmentSlot slot, int light, BipedEntityRenderState state, CallbackInfo ci) {
+    @Inject(method = "renderArmorPiece", at = @At("RETURN"))
+    private void afterRenderArmor(PoseStack matrices, SubmitNodeCollector queue, ItemStack stack, EquipmentSlot slot, int light, HumanoidRenderState state, CallbackInfo ci) {
         bedrockSkins$resetMatrix(matrices);
     }
     //?}

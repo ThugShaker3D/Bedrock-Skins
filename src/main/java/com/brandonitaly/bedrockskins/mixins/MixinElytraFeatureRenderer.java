@@ -2,9 +2,7 @@ package com.brandonitaly.bedrockskins.mixins;
 
 import com.brandonitaly.bedrockskins.client.BedrockModelManager;
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
-import net.minecraft.client.render.entity.feature.ElytraFeatureRenderer;
-import net.minecraft.client.render.entity.state.BipedEntityRenderState;
-import net.minecraft.client.util.math.MatrixStack;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -12,14 +10,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.UUID;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.layers.WingsLayer;
+import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 
-//? if <=1.21.8 {
-/*import net.minecraft.client.render.VertexConsumerProvider;*/
-//?} else {
-import net.minecraft.client.render.command.OrderedRenderCommandQueue;
-//?}
-
-@Mixin(ElytraFeatureRenderer.class)
+@Mixin(WingsLayer.class)
 public abstract class MixinElytraFeatureRenderer {
 
     @Unique
@@ -28,14 +23,14 @@ public abstract class MixinElytraFeatureRenderer {
     // --- Shared Logic ---
 
     @Unique
-    private void bedrockSkins$applyOffset(MatrixStack matrices, BipedEntityRenderState state) {
+    private void bedrockSkins$applyOffset(PoseStack matrices, HumanoidRenderState state) {
         // Use pattern matching or casting depending on Java version support
         if (state instanceof BedrockSkinState) {
             UUID uuid = ((BedrockSkinState) state).getUniqueId();
             if (uuid != null) {
                 var model = BedrockModelManager.getModel(uuid);
                 if (model != null && model.capeYOffset != 0f) {
-                    matrices.push();
+                    matrices.pushPose();
                     matrices.translate(0.0, model.capeYOffset * 0.0625f, 0.0);
                     pushed.set(true);
                 }
@@ -44,9 +39,9 @@ public abstract class MixinElytraFeatureRenderer {
     }
 
     @Unique
-    private void bedrockSkins$resetMatrix(MatrixStack matrices) {
+    private void bedrockSkins$resetMatrix(PoseStack matrices) {
         if (Boolean.TRUE.equals(pushed.get())) {
-            try { matrices.pop(); } catch (Exception ignored) { }
+            try { matrices.popPose(); } catch (Exception ignored) { }
             pushed.remove();
         }
     }
@@ -64,13 +59,13 @@ public abstract class MixinElytraFeatureRenderer {
         bedrockSkins$resetMatrix(matrices);
     }*/
     //?} else {
-    @Inject(method = "render", at = @At("HEAD"))
-    private void beforeRender(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, BipedEntityRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
+    @Inject(method = "submit", at = @At("HEAD"))
+    private void beforeRender(PoseStack matrices, SubmitNodeCollector queue, int light, HumanoidRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
         bedrockSkins$applyOffset(matrices, state);
     }
 
-    @Inject(method = "render", at = @At("RETURN"))
-    private void afterRender(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, BipedEntityRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
+    @Inject(method = "submit", at = @At("RETURN"))
+    private void afterRender(PoseStack matrices, SubmitNodeCollector queue, int light, HumanoidRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
         bedrockSkins$resetMatrix(matrices);
     }
     //?}
