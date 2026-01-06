@@ -18,10 +18,15 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.PlayerSkin;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -39,9 +44,13 @@ public class SkinPreviewPanel {
     private FavoriteHeartButton favoriteButton;
     private Button selectButton;
     private LoadedSkin selectedSkin;
-    private String currentSkinKey; // Track currently previewing skin key
+    private String currentSkinKey;
     private PreviewPlayer dummyPlayer;
     private UUID dummyUuid = UUID.randomUUID();
+    private float rotationX = 0;
+    private int lastMouseX = 0;
+    private boolean isDraggingPreview = false;
+    private int previewLeft, previewRight, previewTop, previewBottom;
 
     public SkinPreviewPanel(Minecraft minecraft, Font font, Runnable onFavoritesChanged) {
         this.minecraft = minecraft;
@@ -61,6 +70,17 @@ public class SkinPreviewPanel {
         this.y = y;
         this.width = w;
         this.height = h;
+        
+        // Initialize preview bounds
+        int PANEL_HEADER_HEIGHT = 24;
+        int buttonsHeight = 90;
+        int entityY = y + PANEL_HEADER_HEIGHT;
+        int entityH = h - PANEL_HEADER_HEIGHT - buttonsHeight;
+        int availableHeight = Math.max(entityH, 50);
+        previewLeft = x;
+        previewRight = x + w;
+        previewTop = entityY;
+        previewBottom = entityY + availableHeight;
         
         int PANEL_PADDING = 4;
         int btnW = Math.min(width - 16, 140);
@@ -155,7 +175,7 @@ public class SkinPreviewPanel {
         GameProfile profile = new GameProfile(uuid, name);
         dummyPlayer = PreviewPlayer.PreviewPlayerPool.get(minecraft.level, profile);
 
-        // --- CAPE LOGIC (Mojang Mappings 1.21) ---
+        // --- CAPE LOGIC ---
         Identifier capeToUse = null;
         
         // Priority 1: Use the skin pack's cape if it has one
@@ -260,26 +280,29 @@ public class SkinPreviewPanel {
         int buttonsHeight = 90;
         int entityH = height - PANEL_HEADER_HEIGHT - buttonsHeight;
         int availableHeight = Math.max(entityH, 50);
-        int scale = Math.min((int)(availableHeight / 2.5), 80);
-        float sensitivity = 0.25f;
-        
-        float centerX = x + width / 2.0f;
-        float centerY = entityY + availableHeight / 2.0f + 20;
-        float adjustedMouseX = centerX + (mouseX - centerX) * sensitivity;
-        float adjustedMouseY = centerY + (mouseY - centerY) * sensitivity;
+        previewLeft = x;
+        previewRight = x + width;
+        previewTop = entityY;
+        previewBottom = entityY + availableHeight;
+        int centerX = x + width / 2;
+        int centerY = entityY + availableHeight / 2 + 15;
 
         if (dummyPlayer != null) {
             dummyPlayer.tickCount = (int)(Util.getMillis() / 50L);
-            InventoryScreen.renderEntityInInventoryFollowsMouse(
-                gui, 
-                x + 5, entityY + 20, x + width - 5, entityY + availableHeight,
-                scale, 0.0625f, 
-                adjustedMouseX, adjustedMouseY, 
-                dummyPlayer
-            );
+            
+            // Update rotation when dragging
+            if (isDraggingPreview) {
+                float sensitivity = 0.5f;
+                float deltaX = (mouseX - lastMouseX) * sensitivity;
+                rotationX -= deltaX;
+            }
+            
+            lastMouseX = mouseX;
+            
+            renderRotatableEntity(gui, centerX, centerY, width, availableHeight, dummyPlayer);
         } else {
             int textY = entityY + (availableHeight / 2) - (font.lineHeight / 2);
-            gui.drawCenteredString(font, Component.translatable("bedrockskins.preview.unavailable"), (int)centerX, textY, 0xFFAAAAAA);
+            gui.drawCenteredString(font, Component.translatable("bedrockskins.preview.unavailable"), centerX, textY, 0xFFAAAAAA);
         }
 
         if (selectedSkin != null) {
@@ -288,8 +311,99 @@ public class SkinPreviewPanel {
             int PANEL_PADDING = 4;
             int btnH = 20;
             int textY = y + height - PANEL_PADDING - (btnH * 2) - 8 - font.lineHeight - 4; // Above the buttons
-            gui.drawCenteredString(font, name, (int)centerX, textY, 0xFFAAAAAA);
+            gui.drawCenteredString(font, name, centerX, textY, 0xFFAAAAAA);
         }
+    }
+    
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // Check if click is within preview area
+        if (button == 0 && mouseX >= previewLeft && mouseX <= previewRight && 
+            mouseY >= previewTop && mouseY <= previewBottom) {
+            isDraggingPreview = true;
+            return true;
+        }
+        return false;
+    }
+    
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && isDraggingPreview) {
+            isDraggingPreview = false;
+            return true;
+        }
+        return false;
+    }
+    
+    private void renderRotatableEntity(GuiGraphics gui, int x, int y, int width, int height, LivingEntity entity) {
+        int size = Math.min((int)(height / 2.5), 80);
+        float rotationModifier = 3;
+        
+        // Save entity state
+        float yBodyRot = entity.yBodyRot;
+        float yRot = entity.getYRot();
+        float yRotO = entity.yRotO;
+        float yBodyRotO = entity.yBodyRotO;
+        float xRot = entity.getXRot();
+        float xRotO = entity.xRotO;
+        float yHeadRotO = entity.yHeadRotO;
+        float yHeadRot = entity.yHeadRot;
+        Vec3 vel = entity.getDeltaMovement();
+        
+        // Apply rotation to entity
+        entity.yBodyRot = (180.0F + rotationX * rotationModifier);
+        entity.setYRot(180.0F + rotationX * rotationModifier);
+        entity.yBodyRotO = entity.yBodyRot;
+        entity.yRotO = entity.getYRot();
+        entity.setDeltaMovement(Vec3.ZERO);
+        entity.setXRot(0);
+        entity.xRotO = entity.getXRot();
+        entity.yHeadRot = entity.getYRot();
+        entity.yHeadRotO = entity.getYRot();
+        
+        // Setup quaternions for rotation
+        Quaternionf quaternion = new Quaternionf().rotationZ((float)Math.toRadians(180.0F));
+        Quaternionf quaternion2 = new Quaternionf().rotationX(0); // No Y-axis rotation
+        quaternion.mul(quaternion2);
+        
+        // Get entity renderer and create render state
+        EntityRenderDispatcher entityRenderDispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+        var entityRenderer = entityRenderDispatcher.getRenderer(entity);
+        var entityRenderState = entityRenderer.createRenderState(entity, 1.0F);
+        
+        // Disable hitboxes
+        entityRenderState.boundingBoxHeight = 0;
+        entityRenderState.boundingBoxWidth = 0;
+        
+        // Calculate scale and position
+        float scale = entity.getScale();
+        Vector3f vector3f = new Vector3f(0.0F, entity.getBbHeight() / 2.0F, 0.0F);
+        float renderScale = (float) size / scale;
+        
+        // Conjugate quaternion2 for camera orientation
+        quaternion2.conjugate();
+        
+        // Submit entity render state
+        gui.submitEntityRenderState(
+            entityRenderState,
+            renderScale,
+            vector3f,
+            quaternion,
+            quaternion2,
+            x - width,
+            y - height,
+            x + width,
+            y + height
+        );
+        
+        // Restore entity state
+        entity.yBodyRot = yBodyRot;
+        entity.yBodyRotO = yBodyRotO;
+        entity.setYRot(yRot);
+        entity.yRotO = yRotO;
+        entity.setXRot(xRot);
+        entity.xRotO = xRotO;
+        entity.yHeadRotO = yHeadRotO;
+        entity.yHeadRot = yHeadRot;
+        entity.setDeltaMovement(vel);
     }
     
     public void renderSprites(GuiGraphics gui) {

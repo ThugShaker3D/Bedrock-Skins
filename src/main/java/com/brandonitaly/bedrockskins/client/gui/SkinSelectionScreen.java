@@ -23,6 +23,7 @@ public class SkinSelectionScreen extends Screen {
     private SkinPreviewPanel previewPanel;
     
     private String selectedPackId;
+    private boolean wasMousePressed = false;
     
     private final Map<String, List<LoadedSkin>> skinCache = new HashMap<>();
 
@@ -226,8 +227,23 @@ public class SkinSelectionScreen extends Screen {
         drawPanel(gui, rPacks, Component.translatable("bedrockskins.gui.packs"));
         drawPanel(gui, rSkins, Component.translatable("bedrockskins.gui.skins"));
         
-        // Draw preview panel BEFORE super.render() so buttons render on top
+        // Handle mouse events for preview panel
+        boolean mousePressed = org.lwjgl.glfw.GLFW.glfwGetMouseButton(
+            org.lwjgl.glfw.GLFW.glfwGetCurrentContext(),
+            org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT
+        ) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        
         if (previewPanel != null) {
+            // Detect mouse click
+            if (mousePressed && !wasMousePressed) {
+                previewPanel.mouseClicked(mouseX, mouseY, 0);
+            }
+            // Detect mouse release
+            if (!mousePressed && wasMousePressed) {
+                previewPanel.mouseReleased(mouseX, mouseY, 0);
+            }
+            wasMousePressed = mousePressed;
+            
             previewPanel.render(gui, mouseX, mouseY);
         }
         
