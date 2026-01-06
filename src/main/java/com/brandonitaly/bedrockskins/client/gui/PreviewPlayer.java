@@ -6,43 +6,58 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelPart;
+import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.core.ClientAsset.ResourceTexture;
 
 public class PreviewPlayer extends RemotePlayer {
+
+    private Identifier forcedCape = null;
 
     public PreviewPlayer(ClientLevel world, GameProfile profile) {
         super(world, profile);
     }
 
-    // --- VISUAL FIX ---
-    // This forces the game to render the outer skin layers (Hat, Jacket, Pants, Sleeves)
-    // without needing to hack the DataTracker with reflection.
+    // Sets a cape to be forced on the player preview
+    public void setForcedCape(Identifier cape) {
+        this.forcedCape = cape;
+    }
+
+    @Override
+    public PlayerSkin getSkin() {
+        PlayerSkin original = super.getSkin();
+        if (forcedCape != null) {
+            // Create a new PlayerSkin with the forced cape
+            ResourceTexture capeAsset = new ResourceTexture(forcedCape, forcedCape);
+            return new PlayerSkin(
+                original.body(),
+                capeAsset,
+                original.elytra(),
+                original.model(),
+                original.secure()
+            );
+        }
+        return original;
+    }
+
+    // Forces outer skin layers to render
     @Override
     public boolean isModelPartShown(PlayerModelPart part) {
         return true;
     }
 
-    // --- POOL ---
     public static final class PreviewPlayerPool {
         private static final Map<UUID, PreviewPlayer> pool = new ConcurrentHashMap<>();
 
         public static PreviewPlayer get(ClientLevel world, GameProfile profile) {
             UUID id;
-            
             try {
                 // Try standard getter via reflection
                 java.lang.reflect.Method m = GameProfile.class.getMethod("getId");
                 id = (UUID) m.invoke(profile);
             } catch (Exception e) {
-                // Fallback to field access if getter fails
-                try {
-                    java.lang.reflect.Field f = GameProfile.class.getDeclaredField("id");
-                    f.setAccessible(true);
-                    id = (UUID) f.get(profile);
-                } catch (Exception ex) {
-                    // Ultimate fallback
-                    id = UUID.randomUUID();
-                }
+                id = UUID.randomUUID();
             }
 
             return pool.computeIfAbsent(id, k -> new PreviewPlayer(world, profile));
