@@ -369,6 +369,9 @@ public class SkinPreviewPanel {
         var entityRenderer = entityRenderDispatcher.getRenderer(entity);
         var entityRenderState = entityRenderer.createRenderState(entity, 1.0F);
         
+        // Set full brightness lighting
+        entityRenderState.lightCoords = 15728880;
+        
         // Disable hitboxes
         entityRenderState.boundingBoxHeight = 0;
         entityRenderState.boundingBoxWidth = 0;
