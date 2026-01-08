@@ -38,6 +38,7 @@ public class SkinPreviewPanel {
     private final Minecraft minecraft;
     private final Font font;
     private final Runnable onFavoritesChanged;
+    private static final Identifier ROTATE_SPRITE = Identifier.fromNamespaceAndPath("bedrockskins", "container/rotate");
     
     // State
     private int x, y, width, height;
@@ -176,22 +177,10 @@ public class SkinPreviewPanel {
         dummyPlayer = PreviewPlayer.PreviewPlayerPool.get(minecraft.level, profile);
 
         // --- CAPE LOGIC ---
-        Identifier capeToUse = null;
-        
-        // Priority 1: Use the skin pack's cape if it has one
-        if (selectedSkin != null && selectedSkin.capeIdentifier != null) {
-            capeToUse = selectedSkin.capeIdentifier;
-        }
-        // Priority 2: Use player's current cape if they have cape rendering enabled
-        else if (minecraft.player != null && 
-                 minecraft.player.isModelPartShown(net.minecraft.world.entity.player.PlayerModelPart.CAPE)) {
-            PlayerSkin skin = minecraft.player.getSkin();
-            capeToUse = skin.cape() != null ? skin.cape().id() : null;
-        }
-        
-        if (capeToUse != null) {
-            dummyPlayer.setForcedCape(capeToUse);
-        }
+        // Only show capes provided by the selected skin
+        Identifier capeToUse = (selectedSkin != null) ? selectedSkin.capeIdentifier : null;
+        // Always set, including null, to ensure clearing when skin has no cape
+        dummyPlayer.setForcedCape(capeToUse);
     }
 
     private void applySkin() {
@@ -279,7 +268,12 @@ public class SkinPreviewPanel {
         int entityY = y + PANEL_HEADER_HEIGHT;
         int buttonsHeight = 90;
         int entityH = height - PANEL_HEADER_HEIGHT - buttonsHeight;
-        int availableHeight = Math.max(entityH, 50);
+        // Reserve vertical space for the rotate hint sprite so it never overlaps preview or buttons
+        int rotateW = 45;
+        int rotateH = 7;
+        int rotateGap = 6; // space between preview and rotate sprite
+        int reservedForRotate = rotateH + rotateGap;
+        int availableHeight = Math.max(entityH - reservedForRotate, 0);
         previewLeft = x;
         previewRight = x + width;
         previewTop = entityY;
@@ -300,6 +294,11 @@ public class SkinPreviewPanel {
             lastMouseX = mouseX;
             
             renderRotatableEntity(gui, centerX, centerY, width, availableHeight, dummyPlayer);
+
+            // Draw rotate hint sprite centered below the preview area, above buttons
+            int rotateX = centerX - (rotateW / 2);
+            int rotateY = previewBottom + rotateGap;
+            gui.blitSprite(RenderPipelines.GUI_TEXTURED, ROTATE_SPRITE, rotateX, rotateY, rotateW, rotateH);
         } else {
             int textY = entityY + (availableHeight / 2) - (font.lineHeight / 2);
             gui.drawCenteredString(font, Component.translatable("bedrockskins.preview.unavailable"), centerX, textY, 0xFFAAAAAA);
