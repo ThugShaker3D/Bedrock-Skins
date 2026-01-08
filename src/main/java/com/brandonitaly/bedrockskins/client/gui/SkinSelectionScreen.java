@@ -21,6 +21,7 @@ public class SkinSelectionScreen extends Screen {
     private SkinPackListWidget packList;
     private SkinGridWidget skinGrid;
     private SkinPreviewPanel previewPanel;
+    private final Screen parent;
     
     private String selectedPackId;
     private boolean wasMousePressed = false;
@@ -34,6 +35,7 @@ public class SkinSelectionScreen extends Screen {
 
     public SkinSelectionScreen(Screen parent) {
         super(Component.translatable("bedrockskins.gui.title"));
+        this.parent = parent;
     }
 
     @Override
@@ -325,5 +327,10 @@ public class SkinSelectionScreen extends Screen {
                 } catch (Exception e) { }
             }
         }
+    }
+
+    @Override
+    public void onClose() {
+        if (minecraft != null) minecraft.setScreen(parent);
     }
 }
