@@ -5,23 +5,29 @@ import com.brandonitaly.bedrockskins.pack.LoadedSkin;
 import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
 import com.brandonitaly.bedrockskins.client.gui.PreviewPlayer.PreviewPlayerPool;
 import com.mojang.authlib.GameProfile;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
-public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget.SkinRowEntry> {
+public class SkinGridWidget extends ObjectSelectionList<SkinGridWidget.SkinRowEntry> {
 
     public static final int CELL_WIDTH = 60;
     public static final int CELL_HEIGHT = 85;
@@ -29,7 +35,7 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
 
     private final Consumer<LoadedSkin> onSelectSkin;
     private final Supplier<LoadedSkin> getSelectedSkin;
-    private final TextRenderer textRenderer;
+    private final Font textRenderer;
     private final Consumer<String> registerTextureFor;
     private final PreviewSkinSetter setPreviewSkin;
     private final Consumer<String> resetPreviewSkin;
@@ -41,14 +47,14 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
     }
 
     public SkinGridWidget(
-            MinecraftClient client,
+            Minecraft client,
             int width,
             int height,
             int y,
             int itemHeight,
             Consumer<LoadedSkin> onSelectSkin,
             Supplier<LoadedSkin> getSelectedSkin,
-            TextRenderer textRenderer,
+            Font textRenderer,
             Consumer<String> registerTextureFor,
             PreviewSkinSetter setPreviewSkin,
             Consumer<String> resetPreviewSkin
@@ -68,18 +74,18 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
     }
 
     @Override
-    protected int getScrollbarX() {
+    protected int scrollBarX() {
         return this.getX() + this.width - 6;
     }
 
     //? if <=1.21.8 {
     /*
     @Override
-    public void drawSelectionHighlight(DrawContext context, int startX, int startY, int width, int height, int color) {}
+    protected void renderSelection(DrawContext context, int startX, int startY, int width, int height, int color) {}
     */
     //?} else {
     @Override
-    public void drawSelectionHighlight(DrawContext context, SkinRowEntry entry, int color) {}
+    protected void renderSelection(GuiGraphics context, SkinRowEntry entry, int color) {}
     //?}
 
     public void addEntryPublic(SkinRowEntry entry) {
@@ -97,7 +103,7 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
         super.clearEntries();
     }
 
-    public class SkinRowEntry extends AlwaysSelectedEntryListWidget.Entry<SkinRowEntry> {
+    public class SkinRowEntry extends ObjectSelectionList.Entry<SkinRowEntry> {
         private final List<SkinCell> cells = new ArrayList<>();
 
         public SkinRowEntry(List<LoadedSkin> skins) {
@@ -114,7 +120,7 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
 
         // --- Shared Logic ---
 
-        private void renderCommon(DrawContext context, int x, int y, int mouseX, int mouseY, float tickDelta) {
+        private void renderCommon(GuiGraphics context, int x, int y, int mouseX, int mouseY, float tickDelta) {
             for (int i = 0; i < cells.size(); i++) {
                 SkinCell cell = cells.get(i);
                 int cx = x + (i * (CELL_WIDTH + CELL_PADDING));
@@ -133,9 +139,9 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
                     SkinCell cell = cells.get(index);
                     onSelectSkin.accept(cell.skin);
 
-                    if (MinecraftClient.getInstance().getSoundManager() != null) {
-                        MinecraftClient.getInstance().getSoundManager().play(
-                                PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0f)
+                    if (Minecraft.getInstance().getSoundManager() != null) {
+                        Minecraft.getInstance().getSoundManager().play(
+                                SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f)
                         );
                     }
 
@@ -163,18 +169,18 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
         }
         */
         //?} else {
-        public void render(DrawContext context, int mouseX, int mouseY, boolean hovered, float tickDelta) {
+        public void renderContent(GuiGraphics context, int mouseX, int mouseY, boolean hovered, float tickDelta) {
             renderCommon(context, getX(), getY(), mouseX, mouseY, tickDelta);
         }
 
-        public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
+        public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent click, boolean doubled) {
             return clickCommon((int) (click.x() - getX()), doubled);
         }
         //?}
 
         @Override
-        public Text getNarration() {
-            return Text.empty();
+        public Component getNarration() {
+            return Component.empty();
         }
 
         public class SkinCell {
@@ -183,13 +189,19 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
             private final UUID uuid = UUID.randomUUID();
             private final String name;
 
+            // Hover rotation state
+            private float hoverYaw = 0f; // degrees
+            private long lastHoverTime = Util.getMillis();
+
+            private static final Identifier EQUIPPED_BORDER = Identifier.fromNamespaceAndPath("bedrockskins", "container/equipped_item_border");
+
             public SkinCell(LoadedSkin skin) {
                 this.skin = skin;
                 // Assumes getters exist for safeSkinName and skinDisplayName
                 String translated = SkinPackLoader.getTranslation(skin.getSafeSkinName()); 
                 this.name = translated != null ? translated : skin.getSkinDisplayName();
 
-                ClientWorld world = MinecraftClient.getInstance().world;
+                ClientLevel world = Minecraft.getInstance().level;
                 if (world != null) {
                     // Assumes getter exists for key
                     String[] parts = skin.getKey().split(":", 2); 
@@ -213,7 +225,7 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
                 PreviewPlayerPool.remove(uuid);
             }
 
-            public void render(DrawContext context, int x, int y, int w, int h, boolean hovered, float delta, int mouseX, int mouseY) {
+            public void render(GuiGraphics context, int x, int y, int w, int h, boolean hovered, float delta, int mouseX, int mouseY) {
                 LoadedSkin selected = getSelectedSkin.get();
                 boolean isSelected = (selected != null && selected.equals(skin));
 
@@ -237,18 +249,99 @@ public class SkinGridWidget extends AlwaysSelectedEntryListWidget<SkinGridWidget
                 drawBorder(context, x, y, w, h, borderColor);
 
                 if (player != null) {
+                    // Update hover rotation state (increment while hovered, reset instantly when not hovered)
+                    long now = Util.getMillis();
+                    long dt = Math.max(0, now - lastHoverTime);
+                    lastHoverTime = now;
+                    if (hovered) {
+                        // rotate clockwise at ~30 deg/sec
+                        hoverYaw += dt * 0.03f;
+                        if (hoverYaw > 360f) hoverYaw -= 360f;
+                    } else {
+                        // reset instantly
+                        hoverYaw = 0f;
+                    }
+
                     float pX = x + w / 2.0f;
                     float pY = y + h / 2.0f;
-                    // Draw entity with simplified args
-                    InventoryScreen.drawEntity(context, x + 2, y + 2, x + w - 2, y + h - 4, 30, 0.0625f, pX, pY, player);
+
+                    // Save entity state
+                    float yBodyRot = player.yBodyRot;
+                    float yRot = player.getYRot();
+                    float yRotO = player.yRotO;
+                    float yBodyRotO = player.yBodyRotO;
+                    float xRot = player.getXRot();
+                    float xRotO = player.xRotO;
+                    float yHeadRotO = player.yHeadRotO;
+                    float yHeadRot = player.yHeadRot;
+                    Vec3 vel = player.getDeltaMovement();
+
+                    // Apply rotation
+                    player.yBodyRot = (180.0F + hoverYaw);
+                    player.setYRot(180.0F + hoverYaw);
+                    player.yBodyRotO = player.yBodyRot;
+                    player.yRotO = player.getYRot();
+                    player.setDeltaMovement(Vec3.ZERO);
+                    player.setXRot(0);
+                    player.xRotO = player.getXRot();
+                    player.yHeadRot = player.getYRot();
+                    player.yHeadRotO = player.getYRot();
+
+                    // Custom render using submitEntityRenderState so hover rotation is preserved
+                    EntityRenderDispatcher entityRenderDispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+                    var entityRenderer = entityRenderDispatcher.getRenderer(player);
+                    var entityRenderState = entityRenderer.createRenderState(player, 1.0F);
+                    // full bright lighting and no hitbox
+                    entityRenderState.lightCoords = 15728880;
+                    entityRenderState.boundingBoxHeight = 0;
+                    entityRenderState.boundingBoxWidth = 0;
+
+                    // Calculate scale/position
+                    int size = Math.min((int)(h / 2.75), 72);
+                    float scale = player.getScale();
+                    Vector3f vector3f = new Vector3f(0.0F, player.getBbHeight() / 2.0F, 0.0F);
+                    float renderScale = (float) size / scale;
+
+                    // Setup quaternions for orientation
+                    Quaternionf quaternion = new Quaternionf().rotationZ((float)Math.toRadians(180.0F));
+                    Quaternionf quaternion2 = new Quaternionf().rotationX(0);
+                    quaternion.mul(quaternion2);
+                    quaternion2.conjugate();
+
+                    // Center coordinates for rendering
+                    int left = x + (w / 2) - (w / 2);
+                    int top = y + (h / 2) - (h / 2);
+                    int right = x + (w / 2) + (w / 2);
+                    int bottom = y + (h / 2) + (h / 2);
+
+                    // Use common helper
+                    GuiUtils.renderEntityInRect(context, player, hoverYaw, left, top, right, bottom, 72);
+
+                    // Restore entity state
+                    player.yBodyRot = yBodyRot;
+                    player.yBodyRotO = yBodyRotO;
+                    player.setYRot(yRot);
+                    player.yRotO = yRotO;
+                    player.setXRot(xRot);
+                    player.xRotO = xRotO;
+                    player.yHeadRotO = yHeadRotO;
+                    player.yHeadRot = yHeadRot;
+                    player.setDeltaMovement(vel);
+                }
+
+                // If this skin is currently equipped by the local player, draw the nine-sliced equipped border on top
+                String localKey = SkinManager.getLocalSelectedKey();
+                boolean isEquipped = localKey != null && localKey.equals(skin.getKey());
+                if (isEquipped) {
+                    context.blitSprite(RenderPipelines.GUI_TEXTURED, EQUIPPED_BORDER, x, y, w, h);
                 }
 
                 if (hovered) {
-                    context.drawTooltip(textRenderer, Text.literal(name), mouseX, mouseY);
+                    context.setTooltipForNextFrame(textRenderer, Component.literal(name), mouseX, mouseY);
                 }
             }
 
-            private void drawBorder(DrawContext context, int x, int y, int width, int height, int color) {
+            private void drawBorder(GuiGraphics context, int x, int y, int width, int height, int color) {
                 context.fill(x, y, x + width, y + 1, color);
                 context.fill(x, y + height - 1, x + width, y + height, color);
                 context.fill(x, y + 1, x + 1, y + height - 1, color);

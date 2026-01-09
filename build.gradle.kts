@@ -21,8 +21,7 @@ repositories {
 
 dependencies {
     minecraft("com.mojang:minecraft:${sc.current.version}")
-    mappings("net.fabricmc:yarn:${project.property("deps.yarn_mappings")}:v2")
-    // mappings(loom.officialMojangMappings())
+    mappings(loom.officialMojangMappings())
 
     modImplementation("net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${project.property("deps.fabric_api")}")
@@ -41,14 +40,12 @@ tasks {
         inputs.property("name", project.property("mod.name"))
         inputs.property("version", project.property("mod.version"))
         inputs.property("minecraft", project.property("mod.mc_dep"))
-        inputs.property("fabric_kotlin", project.property("deps.fabric_kotlin"))
 
         val props = mapOf(
             "id" to project.property("mod.id"),
             "name" to project.property("mod.name"),
             "version" to project.property("mod.version"),
             "minecraft" to project.property("mod.mc_dep"),
-            "fabric_kotlin" to project.property("deps.fabric_kotlin")
         )
 
         filesMatching("fabric.mod.json") { expand(props) }
@@ -57,11 +54,11 @@ tasks {
         filesMatching("*.mixins.json") { expand("java" to mixinJava) }
     }
 
-    // Builds the version into a shared folder in `build/libs/${mod version}/`
+    // Builds the version into a shared folder in `build/libs/`
     register<Copy>("buildAndCollect") {
         group = "build"
         from(remapJar.map { it.archiveFile }, remapSourcesJar.map { it.archiveFile })
-        into(rootProject.layout.buildDirectory.file("libs/${project.property("mod.version")}"))
+        into(rootProject.layout.buildDirectory.file("libs"))
         dependsOn("build")
     }
 }

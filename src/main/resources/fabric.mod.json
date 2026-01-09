@@ -3,7 +3,7 @@
   "id": "${id}",
   "version": "${version}",
   "name": "${name}",
-  "description": "Allows Bedrock Edition Skin Packs to be used directly in Java Edition.",
+  "description": "Allows Bedrock Edition Skin Packs to be used in Java Edition.",
   "authors": [
     "BrandonItaly"
   ],

@@ -3,13 +3,19 @@ package com.brandonitaly.bedrockskins.client;
 import com.brandonitaly.bedrockskins.bedrock.BedrockBone;
 import com.brandonitaly.bedrockskins.bedrock.BedrockGeometry;
 import net.minecraft.client.model.*;
-import net.minecraft.client.render.entity.model.EntityModelPartNames;
-import net.minecraft.client.render.entity.model.PlayerEntityModel;
-import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
-
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.geom.PartNames;
+import net.minecraft.client.model.geom.PartPose;
+import net.minecraft.client.model.geom.builders.CubeDeformation;
+import net.minecraft.client.model.geom.builders.CubeListBuilder;
+import net.minecraft.client.model.geom.builders.LayerDefinition;
+import net.minecraft.client.model.geom.builders.MeshDefinition;
+import net.minecraft.client.model.geom.builders.PartDefinition;
+import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import java.util.*;
 
-public class BedrockPlayerModel extends PlayerEntityModel {
+public class BedrockPlayerModel extends PlayerModel {
     public final ModelPart root;
     public final Map<String, ModelPart> partsMap;
     public final Map<String, PartTransform> defaultTransforms;
@@ -90,8 +96,8 @@ public class BedrockPlayerModel extends PlayerEntityModel {
     }
 
     private static BuildRootResult buildRoot(BedrockGeometry geometry) {
-        ModelData modelData = new ModelData();
-        ModelPartData rootData = modelData.getRoot();
+        MeshDefinition modelData = new MeshDefinition();
+        PartDefinition rootData = modelData.getRoot();
 
         Map<String, BedrockBone> boneMap = new HashMap<>();
         if (geometry.getBones() != null) for (BedrockBone b : geometry.getBones()) boneMap.put(b.getName(), b);
@@ -103,14 +109,14 @@ public class BedrockPlayerModel extends PlayerEntityModel {
             }
         }
 
-        Map<String, ModelPartData> partDataMap = new HashMap<>();
+        Map<String, PartDefinition> partDataMap = new HashMap<>();
         Set<String> vanillaRootParts = new HashSet<>(Arrays.asList(
-                EntityModelPartNames.HEAD,
-                EntityModelPartNames.BODY,
-                EntityModelPartNames.RIGHT_ARM,
-                EntityModelPartNames.LEFT_ARM,
-                EntityModelPartNames.RIGHT_LEG,
-                EntityModelPartNames.LEFT_LEG
+                PartNames.HEAD,
+                PartNames.BODY,
+                PartNames.RIGHT_ARM,
+                PartNames.LEFT_ARM,
+                PartNames.RIGHT_LEG,
+                PartNames.LEFT_LEG
         ));
 
         List<BedrockBone> bonesToProcess = geometry.getBones() != null ? new ArrayList<>(geometry.getBones()) : new ArrayList<>();
@@ -124,8 +130,8 @@ public class BedrockPlayerModel extends PlayerEntityModel {
             while (iterator.hasNext()) {
                 BedrockBone bone = iterator.next();
                 if (bone.getParent() == null || partDataMap.containsKey(bone.getParent())) {
-                    ModelPartData parentData = bone.getParent() == null ? rootData : partDataMap.get(bone.getParent());
-                    ModelPartBuilder builder = ModelPartBuilder.create();
+                    PartDefinition parentData = bone.getParent() == null ? rootData : partDataMap.get(bone.getParent());
+                    CubeListBuilder builder = CubeListBuilder.create();
 
                     if (bone.getCubes() != null) {
                         for (var cube : bone.getCubes()) {
@@ -150,7 +156,7 @@ public class BedrockPlayerModel extends PlayerEntityModel {
                             float offX = cOx - bPx;
                             float offY = bPy - cOy - cube.getSize().get(1);
                             float offZ = cOz - bPz;
-                            builder.mirrored(isMirrored).uv(u, v).cuboid(offX, offY, offZ, cube.getSize().get(0), cube.getSize().get(1), cube.getSize().get(2), new Dilation(dilation));
+                            builder.mirror(isMirrored).texOffs(u, v).addBox(offX, offY, offZ, cube.getSize().get(0), cube.getSize().get(1), cube.getSize().get(2), new CubeDeformation(dilation));
                         }
                     }
 
@@ -161,7 +167,7 @@ public class BedrockPlayerModel extends PlayerEntityModel {
                     float pY = 24f - bPy;
                     float pZ = bPz;
                     String vanillaName = mapBoneName(bone.getName());
-                    ModelPartData parentForCreation = (bone.getParent() != null && vanillaRootParts.contains(vanillaName)) ? rootData : parentData;
+                    PartDefinition parentForCreation = (bone.getParent() != null && vanillaRootParts.contains(vanillaName)) ? rootData : parentData;
                     if (bone.getParent() != null && parentForCreation != rootData) {
                         BedrockBone parentBone = boneMap.get(bone.getParent());
                         float ppX = parentBone.getPivot() != null && parentBone.getPivot().size() > 0 ? parentBone.getPivot().get(0) : 0f;
@@ -174,8 +180,8 @@ public class BedrockPlayerModel extends PlayerEntityModel {
                     float rotX = (float)Math.toRadians(-(bone.getRotation() != null && bone.getRotation().size() > 0 ? bone.getRotation().get(0) : 0f));
                     float rotY = (float)Math.toRadians(-(bone.getRotation() != null && bone.getRotation().size() > 1 ? bone.getRotation().get(1) : 0f));
                     float rotZ = (float)Math.toRadians((bone.getRotation() != null && bone.getRotation().size() > 2 ? bone.getRotation().get(2) : 0f));
-                    ModelTransform transform = ModelTransform.of(pX, pY, pZ, rotX, rotY, rotZ);
-                    ModelPartData partData = parentForCreation.addChild(vanillaName, builder, transform);
+                    PartPose transform = PartPose.offsetAndRotation(pX, pY, pZ, rotX, rotY, rotZ);
+                    PartDefinition partData = parentForCreation.addOrReplaceChild(vanillaName, builder, transform);
                     partDataMap.put(bone.getName(), partData);
                     defaultTransforms.put(bone.getName(), new PartTransform(pX, pY, pZ, rotX, rotY, rotZ));
                     if (!vanillaName.equals(bone.getName())) {
@@ -191,8 +197,8 @@ public class BedrockPlayerModel extends PlayerEntityModel {
             }
         }
 
-        TexturedModelData texturedModelData = TexturedModelData.of(modelData, geometry.getDescription().getTextureWidth(), geometry.getDescription().getTextureHeight());
-        ModelPart rootPart = texturedModelData.createModel();
+        LayerDefinition texturedModelData = LayerDefinition.create(modelData, geometry.getDescription().getTextureWidth(), geometry.getDescription().getTextureHeight());
+        ModelPart rootPart = texturedModelData.bakeRoot();
 
         Map<String, ModelPart> finalParts = new HashMap<>();
         for (String name : boneMap.keySet()) {
@@ -234,19 +240,19 @@ public class BedrockPlayerModel extends PlayerEntityModel {
     public static String mapBoneName(String name) {
         String lower = name.toLowerCase();
         switch (lower) {
-            case "head": return EntityModelPartNames.HEAD;
+            case "head": return PartNames.HEAD;
             case "hat":
-            case "headwear": return EntityModelPartNames.HAT;
-            case "body": return EntityModelPartNames.BODY;
-            case "jacket": return EntityModelPartNames.JACKET;
+            case "headwear": return PartNames.HAT;
+            case "body": return PartNames.BODY;
+            case "jacket": return PartNames.JACKET;
             case "rightarm":
-            case "right_arm": return EntityModelPartNames.RIGHT_ARM;
+            case "right_arm": return PartNames.RIGHT_ARM;
             case "leftarm":
-            case "left_arm": return EntityModelPartNames.LEFT_ARM;
+            case "left_arm": return PartNames.LEFT_ARM;
             case "rightleg":
-            case "right_leg": return EntityModelPartNames.RIGHT_LEG;
+            case "right_leg": return PartNames.RIGHT_LEG;
             case "leftleg":
-            case "left_leg": return EntityModelPartNames.LEFT_LEG;
+            case "left_leg": return PartNames.LEFT_LEG;
             case "rightsleeve":
             case "right_sleeve": return "right_sleeve";
             case "leftsleeve":
@@ -265,8 +271,8 @@ public class BedrockPlayerModel extends PlayerEntityModel {
     }
 
     @Override
-    public void setAngles(PlayerEntityRenderState state) {
-        super.setAngles(state);
+    public void setupAnim(AvatarRenderState state) {
+        super.setupAnim(state);
         if (animationArmsOutFront) {
             setArmAngle(partsMap.getOrDefault("rightArm", partsMap.get("right_arm")));
             setArmAngle(partsMap.getOrDefault("leftArm", partsMap.get("left_arm")));
@@ -279,21 +285,21 @@ public class BedrockPlayerModel extends PlayerEntityModel {
 
     private void setArmAngle(ModelPart part) {
         if (part == null) return;
-        part.pitch = -1.5707964f;
-        part.yaw = 0f;
-        part.roll = 0f;
+        part.xRot = -1.5707964f;
+        part.yRot = 0f;
+        part.zRot = 0f;
     }
 
     private void resetLegAngle(String key1, String key2) {
         ModelPart leg = partsMap.getOrDefault(key1, partsMap.get(key2));
         PartTransform def = defaultTransforms.getOrDefault(key1, defaultTransforms.get(key2));
         if (leg == null || def == null) return;
-        leg.pitch = def.pitch;
-        leg.yaw = def.yaw;
-        leg.roll = def.roll;
+        leg.xRot = def.pitch;
+        leg.yRot = def.yaw;
+        leg.zRot = def.roll;
     }
 
-    public void copyFromVanilla(PlayerEntityModel vanillaModel) {
+    public void copyFromVanilla(PlayerModel vanillaModel) {
         // copyRot
         for (var pair : Arrays.asList(new Object[][]{
                 {"head", vanillaModel.head},
@@ -305,19 +311,19 @@ public class BedrockPlayerModel extends PlayerEntityModel {
             ModelPart dest = partsMap.get(name);
             if (dest == null) dest = partsMap.get(mapBoneName(name));
             if (dest != null) {
-                dest.pitch = part.pitch;
-                dest.yaw = part.yaw;
-                dest.roll = part.roll;
+                dest.xRot = part.xRot;
+                dest.yRot = part.yRot;
+                dest.zRot = part.zRot;
             }
         }
 
         if (!animationArmsOutFront) {
-            ModelPart dest = partsMap.get("rightArm"); if (dest != null) { dest.pitch = vanillaModel.rightArm.pitch; dest.yaw = vanillaModel.rightArm.yaw; dest.roll = vanillaModel.rightArm.roll; }
-            dest = partsMap.get("leftArm"); if (dest != null) { dest.pitch = vanillaModel.leftArm.pitch; dest.yaw = vanillaModel.leftArm.yaw; dest.roll = vanillaModel.leftArm.roll; }
+            ModelPart dest = partsMap.get("rightArm"); if (dest != null) { dest.xRot = vanillaModel.rightArm.xRot; dest.yRot = vanillaModel.rightArm.yRot; dest.zRot = vanillaModel.rightArm.zRot; }
+            dest = partsMap.get("leftArm"); if (dest != null) { dest.xRot = vanillaModel.leftArm.xRot; dest.yRot = vanillaModel.leftArm.yRot; dest.zRot = vanillaModel.leftArm.zRot; }
         }
         if (!animationStationaryLegs) {
-            ModelPart dest = partsMap.get("rightLeg"); if (dest != null) { dest.pitch = vanillaModel.rightLeg.pitch; dest.yaw = vanillaModel.rightLeg.yaw; dest.roll = vanillaModel.rightLeg.roll; }
-            dest = partsMap.get("leftLeg"); if (dest != null) { dest.pitch = vanillaModel.leftLeg.pitch; dest.yaw = vanillaModel.leftLeg.yaw; dest.roll = vanillaModel.leftLeg.roll; }
+            ModelPart dest = partsMap.get("rightLeg"); if (dest != null) { dest.xRot = vanillaModel.rightLeg.xRot; dest.yRot = vanillaModel.rightLeg.yRot; dest.zRot = vanillaModel.rightLeg.zRot; }
+            dest = partsMap.get("leftLeg"); if (dest != null) { dest.xRot = vanillaModel.leftLeg.xRot; dest.yRot = vanillaModel.leftLeg.yRot; dest.zRot = vanillaModel.leftLeg.zRot; }
         }
 
         // getPivotY reflectively
@@ -330,7 +336,7 @@ public class BedrockPlayerModel extends PlayerEntityModel {
                 return 0f;
             } catch (Exception ex) {
                 try {
-                    var field = net.minecraft.client.model.ModelPart.class.getDeclaredField("pivotY");
+                    var field = net.minecraft.client.model.geom.ModelPart.class.getDeclaredField("pivotY");
                     field.setAccessible(true);
                     return field.getFloat(part);
                 } catch (Exception e) {

@@ -2,11 +2,7 @@ package com.brandonitaly.bedrockskins.mixins;
 
 import com.brandonitaly.bedrockskins.client.BedrockModelManager;
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.entity.feature.CapeFeatureRenderer;
-import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Identifier;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,15 +10,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.UUID;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.layers.CapeLayer;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.resources.Identifier;
 
-//? if <=1.21.8 {
-/*import net.minecraft.client.render.VertexConsumerProvider;*/
-//?} else {
-import net.minecraft.client.render.RenderLayers;
-import net.minecraft.client.render.command.OrderedRenderCommandQueue;
-//?}
-
-@Mixin(CapeFeatureRenderer.class)
+@Mixin(CapeLayer.class)
 public abstract class MixinCapeFeatureRenderer {
     @Unique
     private final ThreadLocal<Boolean> pushed = new ThreadLocal<>();
@@ -41,14 +36,14 @@ public abstract class MixinCapeFeatureRenderer {
     }*/
     //?} else {
     @Redirect(
-        method = "render",
+        method = "submit", // CHANGED FROM "render" TO "submit"
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/client/render/RenderLayers;entitySolid(Lnet/minecraft/util/Identifier;)Lnet/minecraft/client/render/RenderLayer;"
+            target = "Lnet/minecraft/client/renderer/rendertype/RenderTypes;entitySolid(Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType;"
         )
     )
-    private RenderLayer useTranslucentLayer(Identifier texture) {
-        return RenderLayers.entityTranslucent(texture);
+    private RenderType useTranslucentLayer(Identifier texture) {
+        return RenderTypes.entityTranslucent(texture);
     }
     //?}
 
@@ -77,14 +72,14 @@ public abstract class MixinCapeFeatureRenderer {
         }
     }*/
     //?} else {
-    @Inject(method = "render", at = @At("HEAD"))
-    private void beforeRender(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, PlayerEntityRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
+    @Inject(method = "submit", at = @At("HEAD"))
+    private void beforeRender(PoseStack matrices, SubmitNodeCollector queue, int light, AvatarRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
         UUID uuid = (state instanceof BedrockSkinState) ? ((BedrockSkinState) state).getUniqueId() : null;
         if (uuid == null) return;
 
         var model = BedrockModelManager.getModel(uuid);
         if (model != null && model.capeYOffset != 0f) {
-            matrices.push();
+            matrices.pushPose();
             // 0.0625f converts pixels to block units
             double translateY = model.capeYOffset * 0.0625f;
             matrices.translate(0.0, translateY, 0.0);
@@ -92,10 +87,10 @@ public abstract class MixinCapeFeatureRenderer {
         }
     }
 
-    @Inject(method = "render", at = @At("RETURN"))
-    private void afterRender(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, PlayerEntityRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
+    @Inject(method = "submit", at = @At("RETURN"))
+    private void afterRender(PoseStack matrices, SubmitNodeCollector queue, int light, AvatarRenderState state, float limbAngle, float limbDistance, CallbackInfo ci) {
         if (Boolean.TRUE.equals(pushed.get())) {
-            try { matrices.pop(); } catch (Exception ignored) { }
+            try { matrices.popPose(); } catch (Exception ignored) { }
             pushed.remove();
         }
     }

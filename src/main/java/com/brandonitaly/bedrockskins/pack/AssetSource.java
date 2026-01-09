@@ -1,6 +1,6 @@
 package com.brandonitaly.bedrockskins.pack;
 
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 
 public abstract class AssetSource {
     private AssetSource() {}

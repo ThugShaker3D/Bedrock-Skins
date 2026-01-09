@@ -1,9 +1,8 @@
 package com.brandonitaly.bedrockskins.client;
 
-import net.minecraft.client.MinecraftClient;
-
 import java.util.HashMap;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 
 public final class SkinManager {
     private SkinManager() {}
@@ -15,10 +14,10 @@ public final class SkinManager {
         try {
             var state = StateManager.readState();
             var selected = state.getSelected();
-            var client = MinecraftClient.getInstance();
+            var client = Minecraft.getInstance();
             var player = client.player;
             if (selected != null && !selected.isEmpty() && player != null) {
-                playerSkins.put(player.getUuid().toString(), selected);
+                playerSkins.put(player.getUUID().toString(), selected);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -26,8 +25,8 @@ public final class SkinManager {
     }
 
     public static String getLocalSelectedKey() {
-        var client = MinecraftClient.getInstance();
-        var localUuid = client.player != null ? client.player.getUuid().toString() : null;
+        var client = Minecraft.getInstance();
+        var localUuid = client.player != null ? client.player.getUUID().toString() : null;
         if (localUuid == null) return null;
         return playerSkins.get(localUuid);
     }
@@ -35,8 +34,8 @@ public final class SkinManager {
     public static void setSkin(String uuid, String packName, String skinName) {
         String key = packName + ":" + skinName;
         playerSkins.put(uuid, key);
-        var client = MinecraftClient.getInstance();
-        var localUuid = client.player != null ? client.player.getUuid().toString() : null;
+        var client = Minecraft.getInstance();
+        var localUuid = client.player != null ? client.player.getUUID().toString() : null;
         if (localUuid != null && localUuid.equals(uuid)) {
             try {
                 var favorites = FavoritesManager.getFavoriteKeys();
@@ -62,8 +61,8 @@ public final class SkinManager {
 
     public static void resetSkin(String uuid) {
         if (playerSkins.remove(uuid) != null) {
-            var client = MinecraftClient.getInstance();
-            var localUuid = client.player != null ? client.player.getUuid().toString() : null;
+            var client = Minecraft.getInstance();
+            var localUuid = client.player != null ? client.player.getUUID().toString() : null;
             if (localUuid != null && localUuid.equals(uuid)) {
                 try {
                     var favorites = FavoritesManager.getFavoriteKeys();

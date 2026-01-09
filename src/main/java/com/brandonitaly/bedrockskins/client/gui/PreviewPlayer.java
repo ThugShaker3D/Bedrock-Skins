@@ -1,63 +1,75 @@
 package com.brandonitaly.bedrockskins.client.gui;
 
 import com.mojang.authlib.GameProfile;
-import net.minecraft.client.network.OtherClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.data.TrackedData;
-
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.PlayerModelPart;
+import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.core.ClientAsset.ResourceTexture;
 
-public class PreviewPlayer extends OtherClientPlayerEntity {
-    public PreviewPlayer(ClientWorld world, GameProfile profile) {
+public class PreviewPlayer extends RemotePlayer {
+
+    private Identifier forcedCape = null;
+
+    public PreviewPlayer(ClientLevel world, GameProfile profile) {
         super(world, profile);
+    }
 
-        // Attempt to set model customization bits in a version-safe way
+    // Sets a cape to be forced on the player preview
+    public void setForcedCape(Identifier cape) {
+        this.forcedCape = cape;
+    }
+
+    @Override
+    public PlayerSkin getSkin() {
+        PlayerSkin original = super.getSkin();
+        if (forcedCape != null) {
+            // Create a new PlayerSkin with the forced cape
+            ResourceTexture capeAsset = new ResourceTexture(forcedCape, forcedCape);
+            return new PlayerSkin(
+                original.body(),
+                capeAsset,
+                original.elytra(),
+                original.model(),
+                original.secure()
+            );
+        }
+        return original;
+    }
+
+    // Forces outer skin layers to render
+    @Override
+    public boolean isModelPartShown(PlayerModelPart part) {
+        // Respect the client's options so changes update the preview instantly
         try {
-            java.lang.reflect.Field f = PlayerEntity.class.getField("PLAYER_MODE_CUSTOMIZATION_ID");
-            Object obj = f.get(null);
-            if (obj instanceof TrackedData) {
-                @SuppressWarnings("unchecked")
-                TrackedData<Byte> td = (TrackedData<Byte>) obj;
-                this.getDataTracker().set(td, (byte)127);
-            }
+            return Minecraft.getInstance().options.isModelPartEnabled(part);
         } catch (Exception e) {
-            try {
-                java.lang.reflect.Field f2 = PlayerEntity.class.getField("PLAYER_MODEL_PARTS");
-                Object obj2 = f2.get(null);
-                if (obj2 instanceof TrackedData) {
-                    @SuppressWarnings("unchecked")
-                    TrackedData<Byte> td2 = (TrackedData<Byte>) obj2;
-                    this.getDataTracker().set(td2, (byte)127);
-                }
-            } catch (Exception ignored) {}
+            return true;
         }
     }
 
-    // Pool
     public static final class PreviewPlayerPool {
         private static final Map<UUID, PreviewPlayer> pool = new ConcurrentHashMap<>();
 
-        public static PreviewPlayer get(ClientWorld world, GameProfile profile) {
-                UUID id;
+        public static PreviewPlayer get(ClientLevel world, GameProfile profile) {
+            UUID id;
             try {
+                // Try standard getter via reflection
                 java.lang.reflect.Method m = GameProfile.class.getMethod("getId");
                 id = (UUID) m.invoke(profile);
             } catch (Exception e) {
-                try {
-                    java.lang.reflect.Field f = GameProfile.class.getField("id");
-                    id = (UUID) f.get(profile);
-                } catch (Exception ex) {
-                    id = UUID.randomUUID();
-                }
+                id = UUID.randomUUID();
             }
+
             return pool.computeIfAbsent(id, k -> new PreviewPlayer(world, profile));
         }
 
         public static void remove(UUID id) { pool.remove(id); }
-
         public static void clear() { pool.clear(); }
     }
 }
