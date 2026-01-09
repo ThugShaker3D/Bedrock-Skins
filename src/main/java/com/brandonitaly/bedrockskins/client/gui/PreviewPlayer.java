@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.resources.Identifier;
@@ -44,7 +45,12 @@ public class PreviewPlayer extends RemotePlayer {
     // Forces outer skin layers to render
     @Override
     public boolean isModelPartShown(PlayerModelPart part) {
-        return true;
+        // Respect the client's options so changes update the preview instantly
+        try {
+            return Minecraft.getInstance().options.isModelPartEnabled(part);
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     public static final class PreviewPlayerPool {

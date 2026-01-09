@@ -44,6 +44,7 @@ public class SkinPreviewPanel {
     private int x, y, width, height;
     private FavoriteHeartButton favoriteButton;
     private Button selectButton;
+    private Button resetButton;
     private LoadedSkin selectedSkin;
     private String currentSkinKey;
     private PreviewPlayer dummyPlayer;
@@ -89,26 +90,80 @@ public class SkinPreviewPanel {
         int btnX = x + (width / 2) - (btnW / 2);
         int startY = y + h - PANEL_PADDING - btnH - 4;
         
-        // Reset button (bottom)
-        widgetAdder.accept(Button.builder(Component.translatable("bedrockskins.button.reset"), b -> resetSkin())
-                .bounds(btnX, startY, btnW, btnH).build());
-        startY -= (btnH + 4);
-        
-        // Select button (middle) - adjusted width to make room for favorite button
+        // Compute bottom and middle Y positions
+        int bottomY = startY; // bottom row (was reset)
+        int middleY = startY - (btnH + 4); // middle row (was select)
+
+        // Compute narrow width and x for the right-side button (when paired with favorite)
         int selectBtnW = btnW - 20 - 2; // 20px for heart button, 2px gap
         int selectBtnX = btnX + 20 + 2; // Offset to the right
+
+        // Select button (moved to bottom) - full width
         selectButton = Button.builder(Component.translatable("bedrockskins.button.select"), b -> applySkin())
-                .bounds(selectBtnX, startY, selectBtnW, btnH).build();
+                .bounds(btnX, bottomY, btnW, btnH).build();
         widgetAdder.accept(selectButton);
-        
-        // Favorite button (left of select button) - heart icon button
+
+        // Favorite button (left of the middle row)
         Identifier heartEmpty = Identifier.fromNamespaceAndPath("minecraft", "hud/heart/container");
         Identifier heartFull = Identifier.fromNamespaceAndPath("minecraft", "hud/heart/full");
-        
-        favoriteButton = new FavoriteHeartButton(btnX, startY, 20, heartEmpty, heartFull, b -> toggleFavorite());
+        favoriteButton = new FavoriteHeartButton(btnX, middleY, 20, heartEmpty, heartFull, b -> toggleFavorite());
         widgetAdder.accept(favoriteButton.getButton());
+
+        // Reset button (placed in the middle row to the right of favorite, narrow)
+        resetButton = Button.builder(Component.translatable("bedrockskins.button.reset"), b -> resetSkin())
+                .bounds(selectBtnX, middleY, selectBtnW, btnH).build();
+        widgetAdder.accept(resetButton);
         
         initPreviewState();
+    }
+
+    // Reposition the panel without adding new widgets
+    public void reposition(int x, int y, int w, int h) {
+        this.x = x;
+        this.y = y;
+        this.width = w;
+        this.height = h;
+
+        int PANEL_HEADER_HEIGHT = 24;
+        int buttonsHeight = 90;
+        int entityY = y + PANEL_HEADER_HEIGHT;
+        int entityH = h - PANEL_HEADER_HEIGHT - buttonsHeight;
+        int availableHeight = Math.max(entityH, 50);
+        previewLeft = x;
+        previewRight = x + w;
+        previewTop = entityY;
+        previewBottom = entityY + availableHeight;
+
+        int PANEL_PADDING = 4;
+        int btnW = Math.min(width - 16, 140);
+        int btnH = 20;
+        int btnX = x + (width / 2) - (btnW / 2);
+        int startY = y + h - PANEL_PADDING - btnH - 4;
+
+        int baseStartY = startY; // this is the Y used for the reset button (bottom before swap)
+        int middleY = baseStartY - (btnH + 4); // middle row
+
+        int selectBtnW = btnW - 20 - 2; // 20px for heart button, 2px gap
+        int selectBtnX = btnX + 20 + 2; // Offset to the right
+
+        if (selectButton != null) {
+            // select should be full-width on the bottom row
+            selectButton.setX(btnX);
+            selectButton.setY(baseStartY);
+            selectButton.setWidth(btnW);
+        }
+        if (favoriteButton != null) {
+            // favorite remains in the middle-left position
+            favoriteButton.getButton().setX(btnX);
+            favoriteButton.getButton().setY(middleY);
+        }
+        if (resetButton != null) {
+            // reset is narrow and placed to the right of favorite in the middle row
+            resetButton.setX(selectBtnX);
+            resetButton.setY(middleY);
+            resetButton.setWidth(selectBtnW);
+        }
+
     }
 
     public void initPreviewState() {
@@ -140,6 +195,7 @@ public class SkinPreviewPanel {
             this.currentSkinKey = null;
             updatePreviewModel(dummyUuid, null);
             updateFavoriteButton();
+            updateActionButtons();
         }
     }
 
@@ -147,6 +203,10 @@ public class SkinPreviewPanel {
         this.selectedSkin = skin;
         this.currentSkinKey = skin != null ? skin.getKey() : null;
         updateFavoriteButton();
+        updateActionButtons();
+        // Ensure reset is enabled after selecting a skin and update preview availability
+        if (resetButton != null) resetButton.active = true;
+        updateActionButtons();
         if (skin != null) {
             if (minecraft.player != null && this.dummyUuid.equals(minecraft.player.getUUID())) {
                 safeResetPreview(this.dummyUuid.toString());
@@ -212,6 +272,7 @@ public class SkinPreviewPanel {
             } else {
                 StateManager.saveState(FavoritesManager.getFavoriteKeys(), key);
                 updatePreviewModel(dummyUuid, key);
+        updateActionButtons();
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -242,10 +303,30 @@ public class SkinPreviewPanel {
         else FavoritesManager.addFavorite(selectedSkin);
         
         updateFavoriteButton();
+        updateActionButtons();
         if (onFavoritesChanged != null) onFavoritesChanged.run();
     }
 
+
+
+    private void updateActionButtons() {
+        // Called when skin/player state changes to update reset/preview button states
+        if (resetButton != null) {
+            boolean resetActive;
+            if (minecraft.player != null) {
+                // Enable reset if player has a non-default selected key OR a skin is selected in UI
+                resetActive = SkinManager.getLocalSelectedKey() != null || selectedSkin != null;
+            } else {
+                resetActive = selectedSkin != null || currentSkinKey != null;
+            }
+            resetButton.active = resetActive;
+        }
+
+    }
+
     private void updateFavoriteButton() {
+        // Ensure action buttons reflect current state
+        updateActionButtons();
         if (favoriteButton == null) return;
         
         boolean hasSkin = currentSkinKey != null;
@@ -259,9 +340,22 @@ public class SkinPreviewPanel {
             // Enable select button only when a different skin is selected
             selectButton.active = selectedSkin != null;
         }
+
+        // Reset button should be disabled if player already has default equipped (but enable when a skin is selected)
+        boolean resetActive;
+        if (minecraft.player != null) {
+            resetActive = SkinManager.getLocalSelectedKey() != null || selectedSkin != null;
+        } else {
+            resetActive = selectedSkin != null || currentSkinKey != null;
+        }
+        if (resetButton != null) resetButton.active = resetActive;
+
+
     }
 
     public void render(GuiGraphics gui, int mouseX, int mouseY) {
+
+
         drawPanel(gui, x, y, width, height, Component.translatable("bedrockskins.gui.preview"));
         
         int PANEL_HEADER_HEIGHT = 24;
@@ -333,6 +427,7 @@ public class SkinPreviewPanel {
     }
     
     private void renderRotatableEntity(GuiGraphics gui, int x, int y, int width, int height, LivingEntity entity) {
+        // Calculate size for the entity render (keep moderate defaults)
         int size = Math.min((int)(height / 2.5), 80);
         float rotationModifier = 3;
         
@@ -496,4 +591,6 @@ public class SkinPreviewPanel {
             }
         }
     }
+
+
 }

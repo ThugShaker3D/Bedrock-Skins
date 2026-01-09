@@ -4,24 +4,44 @@ import com.brandonitaly.bedrockskins.client.FavoritesManager;
 import com.brandonitaly.bedrockskins.client.SkinManager;
 import com.brandonitaly.bedrockskins.pack.LoadedSkin;
 import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.tabs.GridLayoutTab;
+import net.minecraft.client.gui.components.tabs.TabManager;
+import net.minecraft.client.gui.components.tabs.TabNavigationBar;
+import net.minecraft.client.gui.layouts.HeaderAndFooterLayout;
+import net.minecraft.client.gui.layouts.LinearLayout;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+import net.minecraft.world.entity.player.PlayerModelPart;
 
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.*;
 
 public class SkinSelectionScreen extends Screen {
+    public static final Identifier TAB_HEADER_BACKGROUND = Identifier.withDefaultNamespace("textures/gui/tab_header_background.png");
 
     // --- Widgets & State ---
+    private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
+    private final TabManager tabManager = new TabManager(this::addRenderableWidget, this::removeWidget);
+    private TabNavigationBar tabNavigationBar;
+    
     private SkinPackListWidget packList;
     private SkinGridWidget skinGrid;
     private SkinPreviewPanel previewPanel;
-    private final Screen parent;
+    private final Screen parent; 
+
+    // tracked active tab: 0=skins, 1=customization
+    private int activeTab = 0;
     
     private String selectedPackId;
     private boolean wasMousePressed = false;
@@ -32,6 +52,13 @@ public class SkinSelectionScreen extends Screen {
     private final Rect rPacks = new Rect();
     private final Rect rSkins = new Rect();
     private final Rect rPreview = new Rect();
+
+    // Widgets for the customization tab (created/removed dynamically)
+    private final java.util.List<AbstractWidget> customizationWidgets = new ArrayList<>();
+
+    // Footer buttons
+    private Button openPacksButton;
+    private Button doneButton;
 
     public SkinSelectionScreen(Screen parent) {
         super(Component.translatable("bedrockskins.gui.title"));
@@ -45,7 +72,66 @@ public class SkinSelectionScreen extends Screen {
         
         buildSkinCache();
         calculateLayout();
-        initWidgets();
+        
+        // Initialize tab navigation
+        this.tabNavigationBar = TabNavigationBar.builder(this.tabManager, this.width)
+            .addTabs(new SkinsTab(), new SkinCustomizationTab())
+            .build();
+        this.addRenderableWidget(this.tabNavigationBar);
+        
+        // Initialize footer buttons
+        int btnW = 150;
+        int btnH = 20;
+        int btnY = this.height - 28;
+        int leftX = this.width / 2 - 154;
+        int rightX = this.width / 2 + 4;
+
+        // Open Skin Packs Folder button
+        this.openPacksButton = Button.builder(Component.translatable("bedrockskins.button.open_packs"), b -> openSkinPacksFolder())
+                .bounds(leftX, btnY, btnW, btnH).build();
+        this.addRenderableWidget(this.openPacksButton);
+
+        // Done button
+        this.doneButton = Button.builder(CommonComponents.GUI_DONE, b -> onClose())
+                .bounds(rightX, btnY, btnW, btnH).build();
+        this.addRenderableWidget(this.doneButton);
+        
+        this.tabNavigationBar.selectTab(0, false);
+        this.repositionElements();
+    }
+    
+    @Override
+    public void repositionElements() {
+        if (this.tabNavigationBar != null) {
+            this.tabNavigationBar.setWidth(this.width);
+            this.tabNavigationBar.arrangeElements();
+            int tabAreaTop = this.tabNavigationBar.getRectangle().bottom();
+            ScreenRectangle tabArea = new ScreenRectangle(0, tabAreaTop, this.width, this.height - this.layout.getFooterHeight() - tabAreaTop);
+            this.tabManager.setTabArea(tabArea);
+            this.layout.setHeaderHeight(tabAreaTop);
+            this.layout.arrangeElements();
+            
+            // Recalculate layout when screen is resized
+            calculateLayout();
+            // Ensure widgets are positioned according to the final layout
+            initWidgets();
+            // Reposition footer buttons
+            if (this.openPacksButton != null && this.doneButton != null) {
+                int btnW = 150;
+                int btnH = 20;
+                int btnY = this.height - 28;
+                int leftX = this.width / 2 - 154;
+                int rightX = this.width / 2 + 4;
+                this.openPacksButton.setX(leftX);
+                this.openPacksButton.setY(btnY);
+                this.openPacksButton.setWidth(btnW);
+                this.openPacksButton.setHeight(btnH);
+                this.doneButton.setX(rightX);
+                this.doneButton.setY(btnY);
+                this.doneButton.setWidth(btnW);
+                this.doneButton.setHeight(btnH);
+            }
+        }
     }
     
     private void buildSkinCache() {
@@ -63,14 +149,36 @@ public class SkinSelectionScreen extends Screen {
     }
 
     private void calculateLayout() {
-        int topNav = 32;
-        int botNav = 32;
+        // deprecated, kept for compatibility - prefer calculateLayout(tabArea)
+        calculateLayout(null);
+    }
+
+    private void calculateLayout(net.minecraft.client.gui.navigation.ScreenRectangle tabArea) {
         int hMargin = 10;
         int gap = 6;
+        int topY;
+        int areaW;
+        int areaH;
+        if (tabArea != null) {
+            // Use accessor methods on ScreenRectangle
+            topY = tabArea.top();
+            areaW = tabArea.width();
+            areaH = tabArea.height();
+        } else {
+            int tabTop = this.tabNavigationBar != null ? this.tabNavigationBar.getRectangle().bottom() : 32;
+            int tabFooter = this.layout.getFooterHeight() > 0 ? this.layout.getFooterHeight() : 32;
+            int fullH = this.height - tabTop - tabFooter;
+            topY = tabTop;
+            areaW = this.width;
+            areaH = fullH;
+        }
+
+        // Reserve a small padding so panels don't touch the tab bar or footer
+        int topPadding = 8;
+        int bottomPadding = 8;
+        int innerH = Math.max(50, areaH - topPadding - bottomPadding);
         
-        int fullW = this.width - (hMargin * 2);
-        int fullH = this.height - topNav - botNav;
-        
+        int fullW = areaW - (hMargin * 2);
         int sideW = Math.max(130, Math.min(200, (int)(fullW * 0.22)));
         int centerW = fullW - (sideW * 2) - (gap * 2);
         
@@ -79,54 +187,65 @@ public class SkinSelectionScreen extends Screen {
             centerW = 100;
         }
 
-        rPacks.set(hMargin, topNav, sideW, fullH);
-        rSkins.set(rPacks.right() + gap, topNav, centerW, fullH);
-        rPreview.set(rSkins.right() + gap, topNav, sideW, fullH);
+        int top = topY + topPadding;
+        rPacks.set(hMargin, top, sideW, innerH);
+        rSkins.set(rPacks.right() + gap, top, centerW, innerH);
+        rPreview.set(rSkins.right() + gap, top, sideW, innerH);
     }
 
     private void initWidgets() {
         if (minecraft == null) return;
         int PANEL_HEADER_HEIGHT = 24;
-        int PANEL_PADDING = 4;
+        int PANEL_PADDING = 4; // restore original padding to match previous layout
 
         // -- Pack List --
         int plY = rPacks.y + PANEL_HEADER_HEIGHT + PANEL_PADDING;
         int plH = rPacks.h - PANEL_HEADER_HEIGHT - (PANEL_PADDING * 2);
-        
-        packList = new SkinPackListWidget(minecraft, rPacks.w - (PANEL_PADDING * 2), plH, plY, 24,
-                this::selectPack,
-                id -> Objects.equals(selectedPackId, id),
-                font);
-        ReflectionHelper.setPos(packList, rPacks.x + PANEL_PADDING, plY);
-        addRenderableWidget(packList);
+
+        if (packList == null) {
+            packList = new SkinPackListWidget(minecraft, rPacks.w - (PANEL_PADDING * 2), plH, plY, 24,
+                    this::selectPack,
+                    id -> Objects.equals(selectedPackId, id),
+                    font);
+            ReflectionHelper.setPos(packList, rPacks.x + PANEL_PADDING, plY);
+            addRenderableWidget(packList);
+        } else {
+            ReflectionHelper.setPos(packList, rPacks.x + PANEL_PADDING, plY);
+            ReflectionHelper.setSize(packList, Math.max(10, rPacks.w - (PANEL_PADDING * 2)), Math.max(10, plH));
+            ReflectionHelper.setListBounds(packList, rPacks.x + PANEL_PADDING, plY, Math.max(10, rPacks.w - (PANEL_PADDING * 2)), Math.max(10, plH));
+        }
 
         // -- Preview Panel --
-        // Pass "this::addRenderableWidget" to allow the panel to add buttons to this screen
-        previewPanel = new SkinPreviewPanel(minecraft, font, this::onFavoritesChanged);
-        previewPanel.init(rPreview.x, rPreview.y, rPreview.w, rPreview.h, this::addRenderableWidget);
+        if (previewPanel == null) {
+            previewPanel = new SkinPreviewPanel(minecraft, font, this::onFavoritesChanged);
+            previewPanel.init(rPreview.x, rPreview.y, rPreview.w, rPreview.h, this::addRenderableWidget);
+        } else {
+            previewPanel.reposition(rPreview.x, rPreview.y, rPreview.w, rPreview.h);
+        }
 
         // -- Skin Grid --
         int sgY = rSkins.y + PANEL_HEADER_HEIGHT + PANEL_PADDING;
         int sgH = rSkins.h - PANEL_HEADER_HEIGHT - (PANEL_PADDING * 2);
-        
-        skinGrid = new SkinGridWidget(minecraft, rSkins.w - (PANEL_PADDING * 2), sgH, sgY, 90,
-                skin -> previewPanel.setSelectedSkin(skin), 
-                () -> previewPanel != null ? previewPanel.getSelectedSkin() : null,
-                font,
-                this::safeRegisterTexture,
-                SkinManager::setPreviewSkin,
-                this::safeResetPreview);
-        ReflectionHelper.setPos(skinGrid, rSkins.x + PANEL_PADDING, sgY);
-        addRenderableWidget(skinGrid);
 
-        // -- Footer Buttons --
-        initFooterButtons();
-        
-        refreshPackList();
-
-        if (selectedPackId != null) {
-            selectPack(selectedPackId);
+        if (skinGrid == null) {
+            skinGrid = new SkinGridWidget(minecraft, rSkins.w - (PANEL_PADDING * 2), sgH, sgY, 90,
+                    skin -> previewPanel.setSelectedSkin(skin),
+                    () -> previewPanel != null ? previewPanel.getSelectedSkin() : null,
+                    font,
+                    this::safeRegisterTexture,
+                    SkinManager::setPreviewSkin,
+                    this::safeResetPreview);
+            ReflectionHelper.setPos(skinGrid, rSkins.x + PANEL_PADDING, sgY);
+            addRenderableWidget(skinGrid);
+        } else {
+            ReflectionHelper.setPos(skinGrid, rSkins.x + PANEL_PADDING, sgY);
+            ReflectionHelper.setSize(skinGrid, Math.max(10, rSkins.w - (PANEL_PADDING * 2)), Math.max(10, sgH));
+            ReflectionHelper.setListBounds(skinGrid, rSkins.x + PANEL_PADDING, sgY, Math.max(10, rSkins.w - (PANEL_PADDING * 2)), Math.max(10, sgH));
         }
+
+        // Refresh pack list entries and selection
+        refreshPackList();
+        if (selectedPackId != null) selectPack(selectedPackId);
     }
     
     private void onFavoritesChanged() {
@@ -137,17 +256,73 @@ public class SkinSelectionScreen extends Screen {
         }
     }
 
-    private void initFooterButtons() {
-        int btnW = 150;
-        int gap = 10;
-        int y = this.height - 24;
-        int centerX = this.width / 2;
-        
-        addRenderableWidget(Button.builder(Component.translatable("bedrockskins.button.open_packs"), b -> openSkinPacksFolder())
-                .bounds(centerX - btnW - (gap/2), y, btnW, 20).build());
-        
-        addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
-                .bounds(centerX + (gap/2), y, btnW, 20).build());
+    private void clearCustomizationWidgets() {
+        for (AbstractWidget w : customizationWidgets) {
+            this.removeWidget(w);
+        }
+        customizationWidgets.clear();
+    }
+
+    private void createCustomizationWidgets(ScreenRectangle tabArea) {
+        int PANEL_HEADER_HEIGHT = 24;
+        int PANEL_PADDING = 4;
+        int colGap = 8;
+        // Constrain button width so two columns always fit inside skins panel
+        int maxButtonWidth = 210;
+        int btnW = Math.min(maxButtonWidth, (rSkins.w - (PANEL_PADDING * 2) - colGap) / 2);
+        int btnH = 20; // keep original height; only width is constrained
+        int gap = 6;
+
+        // Two-column layout within the skins panel
+        int leftX = rSkins.x + PANEL_PADDING;
+        int rightX = rSkins.x + rSkins.w - PANEL_PADDING - btnW;
+        int startY = rSkins.y + PANEL_HEADER_HEIGHT + PANEL_PADDING;
+
+        var options = Minecraft.getInstance().options;
+        PlayerModelPart[] parts = PlayerModelPart.values();
+        int total = parts.length + 1; // include main hand
+
+        for (int i = 0; i < total; i++) {
+            int col = i % 2;
+            int row = i / 2;
+            int x = (col == 0) ? leftX : rightX;
+            int y = startY + row * (btnH + gap);
+
+            if (i < parts.length) {
+                PlayerModelPart part = parts[i];
+                CycleButton<Boolean> btn = CycleButton.onOffBuilder(options.isModelPartEnabled(part))
+                        .create(x, y, btnW, btnH, part.getName(), (button, value) -> options.setModelPart(part, value));
+                this.addRenderableWidget(btn);
+                customizationWidgets.add(btn);
+            } else {
+                // main hand button placed as part of the grid
+                var mainHandBtn = options.mainHand().createButton(options);
+                mainHandBtn.setX(x);
+                mainHandBtn.setY(y);
+                mainHandBtn.setWidth(btnW);
+                this.addRenderableWidget(mainHandBtn);
+                customizationWidgets.add(mainHandBtn);
+            }
+
+            // Prevent buttons from overlapping the bottom of the skins panel
+            if (y + btnH > rSkins.y + rSkins.h - PANEL_PADDING) break;
+        }
+    }
+    private Component getSkinsPanelTitle() {
+        if (selectedPackId == null) return Component.translatable("bedrockskins.gui.skins");
+        List<LoadedSkin> skins = skinCache.get(selectedPackId);
+        int count = skins == null ? 0 : skins.size();
+        String display;
+        if ("skinpack.Favorites".equals(selectedPackId)) {
+            display = Component.translatable("bedrockskins.gui.favorites").getString();
+        } else if (skins != null && !skins.isEmpty()) {
+            String safe = skins.get(0).getSafePackName();
+            String t = SkinPackLoader.getTranslation(safe);
+            display = t != null ? t : skins.get(0).getPackDisplayName();
+        } else {
+            display = selectedPackId;
+        }
+        return Component.literal(display + " (" + count + ")");
     }
 
     private void refreshPackList() {
@@ -182,8 +357,9 @@ public class SkinSelectionScreen extends Screen {
             }
             
             if ("skinpack.Favorites".equals(pid)) {
-                display = "Favorites";
-                internal = "Favorites";
+                String fav = Component.translatable("bedrockskins.gui.favorites").getString();
+                display = fav;
+                internal = fav;
             }
 
             packList.addEntryPublic(new SkinPackListWidget.SkinPackEntry(
@@ -192,6 +368,11 @@ public class SkinSelectionScreen extends Screen {
                     () -> Objects.equals(selectedPackId, pid),
                     font
             ));
+        }
+
+        // If no pack is currently selected, open the first pack by default
+        if (selectedPackId == null && !sortedPacks.isEmpty()) {
+            selectPack(sortedPacks.get(0));
         }
     }
 
@@ -224,10 +405,11 @@ public class SkinSelectionScreen extends Screen {
 
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float delta) {
-        gui.drawCenteredString(font, this.title, this.width / 2, 12, 0xFFFFFFFF);
-
-        drawPanel(gui, rPacks, Component.translatable("bedrockskins.gui.packs"));
-        drawPanel(gui, rSkins, Component.translatable("bedrockskins.gui.skins"));
+        // Only draw the pack & skins panels for the Skins tab
+        if (activeTab == 0) {
+            drawPanel(gui, rPacks, Component.translatable("bedrockskins.gui.packs"));
+            drawPanel(gui, rSkins, getSkinsPanelTitle());
+        }
         
         // Handle mouse events for preview panel
         boolean mousePressed = org.lwjgl.glfw.GLFW.glfwGetMouseButton(
@@ -255,6 +437,15 @@ public class SkinSelectionScreen extends Screen {
         if (previewPanel != null) {
             previewPanel.renderSprites(gui);
         }
+        
+        // Draw footer separator
+        gui.blit(RenderPipelines.GUI_TEXTURED, Screen.FOOTER_SEPARATOR, 0, this.height - this.layout.getFooterHeight() - 2, 0.0F, 0.0F, this.width, 2, 32, 2);
+    }
+    
+    @Override
+    protected void renderMenuBackground(GuiGraphics graphics) {
+        graphics.blit(RenderPipelines.GUI_TEXTURED, TAB_HEADER_BACKGROUND, 0, 0, 0.0F, 0.0F, this.width, this.layout.getHeaderHeight(), 16, 16);
+        this.renderMenuBackground(graphics, 0, this.layout.getHeaderHeight(), this.width, this.height);
     }
 
     private void drawPanel(GuiGraphics gui, Rect r, Component title) {
@@ -276,6 +467,8 @@ public class SkinSelectionScreen extends Screen {
         gui.fill(r.x, r.y, r.x + 1, r.bottom(), COL_BORDER_INNER); 
         gui.fill(r.right() - 1, r.y, r.right(), r.bottom(), COL_BORDER_INNER);
     }
+
+
 
     private static class Rect {
         int x, y, w, h;
@@ -327,10 +520,116 @@ public class SkinSelectionScreen extends Screen {
                 } catch (Exception e) { }
             }
         }
+
+        static void setSize(Object widget, int w, int h) {
+            try {
+                Class<?> clz = widget.getClass();
+                try {
+                    Method mw = clz.getMethod("setWidth", int.class);
+                    mw.invoke(widget, w);
+                } catch (Exception ignored) {
+                    try {
+                        var fw = clz.getField("width");
+                        fw.setAccessible(true);
+                        fw.setInt(widget, w);
+                    } catch (Exception ignored2) {}
+                }
+
+                try {
+                    Method mh = clz.getMethod("setHeight", int.class);
+                    mh.invoke(widget, h);
+                } catch (Exception ignored) {
+                    try {
+                        var fh = clz.getField("height");
+                        fh.setAccessible(true);
+                        fh.setInt(widget, h);
+                    } catch (Exception ignored2) {}
+                }
+            } catch (Exception ignored) {}
+        }
+
+        static void setListBounds(Object widget, int x, int y, int w, int h) {
+            try {
+                Class<?> clz = widget.getClass();
+                // set x/y
+                try { clz.getMethod("setX", int.class).invoke(widget, x); } catch (Exception ignored) {}
+                try { clz.getMethod("setY", int.class).invoke(widget, y); } catch (Exception ignored) {}
+                try { var fx = clz.getField("x"); fx.setAccessible(true); fx.setInt(widget, x); } catch (Exception ignored) {}
+                try { var fy = clz.getField("y"); fy.setAccessible(true); fy.setInt(widget, y); } catch (Exception ignored) {}
+
+                // set width/height
+                setSize(widget, w, h);
+
+                // set top/bottom/left/right if present
+                try { var top = clz.getField("top"); top.setAccessible(true); top.setInt(widget, y); } catch (Exception ignored) {}
+                try { var bottom = clz.getField("bottom"); bottom.setAccessible(true); bottom.setInt(widget, y + h); } catch (Exception ignored) {}
+                try { var left = clz.getField("left"); left.setAccessible(true); left.setInt(widget, x); } catch (Exception ignored) {}
+                try { var right = clz.getField("right"); right.setAccessible(true); right.setInt(widget, x + w); } catch (Exception ignored) {}
+
+                // call methods if available
+                try { clz.getMethod("setTop", int.class).invoke(widget, y); } catch (Exception ignored) {}
+                try { clz.getMethod("setBottom", int.class).invoke(widget, y + h); } catch (Exception ignored) {}
+                try { clz.getMethod("setLeftPos", int.class).invoke(widget, x); } catch (Exception ignored) {}
+                try { clz.getMethod("setRightPos", int.class).invoke(widget, x + w); } catch (Exception ignored) {}
+            } catch (Exception ignored) {}
+        }
     }
 
     @Override
     public void onClose() {
         if (minecraft != null) minecraft.setScreen(parent);
+    }
+    
+    // ========== TAB CLASSES ==========
+    
+    private class SkinsTab extends GridLayoutTab {
+        private static final Component TITLE = Component.translatable("bedrockskins.gui.skins");
+        
+        public SkinsTab() {
+            super(TITLE);
+        }
+        
+        @Override
+        public void doLayout(ScreenRectangle tabArea) {
+            // Activate skins tab
+            SkinSelectionScreen.this.activeTab = 0;
+            // Layout using the tab area so panels are shown only when this tab is active
+            SkinSelectionScreen.this.calculateLayout(tabArea);
+            // Ensure customization widgets (if any) are removed when entering Skins tab
+            SkinSelectionScreen.this.clearCustomizationWidgets();
+            // Initialize or reposition the skins widgets
+            SkinSelectionScreen.this.initWidgets();
+            // Ensure the skins widgets are visible
+            if (SkinSelectionScreen.this.packList != null) SkinSelectionScreen.this.packList.visible = true;
+            if (SkinSelectionScreen.this.skinGrid != null) SkinSelectionScreen.this.skinGrid.visible = true;
+            if (SkinSelectionScreen.this.previewPanel != null) SkinSelectionScreen.this.previewPanel.reposition(SkinSelectionScreen.this.rPreview.x, SkinSelectionScreen.this.rPreview.y, SkinSelectionScreen.this.rPreview.w, SkinSelectionScreen.this.rPreview.h);
+        }
+    }
+    
+    private class SkinCustomizationTab extends GridLayoutTab {
+        private static final Component TITLE = Component.translatable("options.skinCustomisation.title");
+        
+        public SkinCustomizationTab() {
+            super(TITLE);
+        }
+        
+        @Override
+        public void doLayout(ScreenRectangle tabArea) {
+            // Activate customization tab
+            SkinSelectionScreen.this.activeTab = 1;
+            // Layout using the tab area
+            SkinSelectionScreen.this.calculateLayout(tabArea);
+
+            // Hide skin pack/skins widgets
+            if (SkinSelectionScreen.this.packList != null) SkinSelectionScreen.this.packList.visible = false;
+            if (SkinSelectionScreen.this.skinGrid != null) SkinSelectionScreen.this.skinGrid.visible = false;
+
+            // Ensure preview panel remains visible and placed in preview area
+            if (SkinSelectionScreen.this.previewPanel != null) SkinSelectionScreen.this.previewPanel.reposition(SkinSelectionScreen.this.rPreview.x, SkinSelectionScreen.this.rPreview.y, SkinSelectionScreen.this.rPreview.w, SkinSelectionScreen.this.rPreview.h);
+
+            // Remove any existing customization widgets then build new ones positioned within the skins panel
+            SkinSelectionScreen.this.clearCustomizationWidgets();
+            SkinSelectionScreen.this.createCustomizationWidgets(tabArea);
+        }
     }
 }

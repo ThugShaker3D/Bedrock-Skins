@@ -19,6 +19,8 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
 
 public class SkinGridWidget extends ObjectSelectionList<SkinGridWidget.SkinRowEntry> {
 
@@ -182,6 +184,8 @@ public class SkinGridWidget extends ObjectSelectionList<SkinGridWidget.SkinRowEn
             private final UUID uuid = UUID.randomUUID();
             private final String name;
 
+            private static final Identifier EQUIPPED_BORDER = Identifier.fromNamespaceAndPath("bedrockskins", "container/equipped_item_border");
+
             public SkinCell(LoadedSkin skin) {
                 this.skin = skin;
                 // Assumes getters exist for safeSkinName and skinDisplayName
@@ -240,6 +244,13 @@ public class SkinGridWidget extends ObjectSelectionList<SkinGridWidget.SkinRowEn
                     float pY = y + h / 2.0f;
                     // Draw entity with simplified args
                     InventoryScreen.renderEntityInInventoryFollowsMouse(context, x + 2, y + 2, x + w - 2, y + h - 4, 30, 0.0625f, pX, pY, player);
+                }
+
+                // If this skin is currently equipped by the local player, draw the nine-sliced equipped border on top
+                String localKey = SkinManager.getLocalSelectedKey();
+                boolean isEquipped = localKey != null && localKey.equals(skin.getKey());
+                if (isEquipped) {
+                    context.blitSprite(RenderPipelines.GUI_TEXTURED, EQUIPPED_BORDER, x, y, w, h);
                 }
 
                 if (hovered) {
