@@ -5,7 +5,11 @@ import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.core.ClientAsset;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.world.entity.player.PlayerSkin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -52,10 +56,18 @@ public abstract class MixinPlayerListEntry {
 
         if (loadedSkin.capeIdentifier != null) {
             PlayerSkin original = cir.getReturnValue();
+            //? if >=1.21.11 {
             Identifier capeId = loadedSkin.capeIdentifier;
+            //?} else {
+            /*ResourceLocation capeId = loadedSkin.capeIdentifier;*/
+            //?}
             
             // Define default Elytra ID
+            //? if >=1.21.11 {
             Identifier defaultElytraId = Identifier.fromNamespaceAndPath("minecraft", "textures/entity/equipment/wings/elytra.png");
+            //?} else {
+            /*ResourceLocation defaultElytraId = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/equipment/wings/elytra.png");*/
+            //?}
 
             //? if <=1.21.8 {
             /*Identifier elytraId = original.elytraTexture() != null ? original.elytraTexture() : (original.capeTexture() != null ? original.capeTexture() : defaultElytraId);

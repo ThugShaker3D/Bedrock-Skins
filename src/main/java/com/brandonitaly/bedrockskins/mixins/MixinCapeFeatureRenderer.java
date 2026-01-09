@@ -13,9 +13,14 @@ import java.util.UUID;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.layers.CapeLayer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+//? if >=1.21.11 {
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.client.renderer.RenderType;
+import net.minecraft.resources.ResourceLocation;*/
+//?}
 
 @Mixin(CapeLayer.class)
 public abstract class MixinCapeFeatureRenderer {
@@ -23,20 +28,9 @@ public abstract class MixinCapeFeatureRenderer {
     private final ThreadLocal<Boolean> pushed = new ThreadLocal<>();
 
     // Allow capes to use the translucent render layer instead of solid
-    //? if <1.21.11 {
-    /*@Redirect(
-        method = "render",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/client/render/RenderLayer;getEntitySolid(Lnet/minecraft/util/Identifier;)Lnet/minecraft/client/render/RenderLayer;"
-        )
-    )
-    private RenderLayer useTranslucentLayer(Identifier texture) {
-        return RenderLayer.getEntityTranslucent(texture);
-    }*/
-    //?} else {
+    //? if >=1.21.11 {
     @Redirect(
-        method = "submit", // CHANGED FROM "render" TO "submit"
+        method = "submit",
         at = @At(
             value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/rendertype/RenderTypes;entitySolid(Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType;"
@@ -45,6 +39,17 @@ public abstract class MixinCapeFeatureRenderer {
     private RenderType useTranslucentLayer(Identifier texture) {
         return RenderTypes.entityTranslucent(texture);
     }
+    //?} else {
+    /*@Redirect(
+        method = "submit",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/RenderType;entitySolid(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/client/renderer/RenderType;"
+        )
+    )
+    private RenderType useTranslucentLayer(ResourceLocation texture) {
+        return RenderType.entityTranslucent(texture);
+    }*/
     //?}
 
     // Bedrock Cape Positioning

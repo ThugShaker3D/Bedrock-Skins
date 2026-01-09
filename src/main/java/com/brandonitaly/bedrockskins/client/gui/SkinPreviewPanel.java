@@ -20,8 +20,13 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.network.chat.Component;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;
+import net.minecraft.Util;*/
+//?}
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.PlayerSkin;
@@ -38,7 +43,11 @@ public class SkinPreviewPanel {
     private final Minecraft minecraft;
     private final Font font;
     private final Runnable onFavoritesChanged;
+    //? if >=1.21.11 {
     private static final Identifier ROTATE_SPRITE = Identifier.fromNamespaceAndPath("bedrockskins", "container/rotate");
+    //?} else {
+    /*private static final ResourceLocation ROTATE_SPRITE = ResourceLocation.fromNamespaceAndPath("bedrockskins", "container/rotate");*/
+    //?}
     
     // State
     private int x, y, width, height;
@@ -104,8 +113,13 @@ public class SkinPreviewPanel {
         widgetAdder.accept(selectButton);
 
         // Favorite button (left of the middle row)
+        //? if >=1.21.11 {
         Identifier heartEmpty = Identifier.fromNamespaceAndPath("minecraft", "hud/heart/container");
         Identifier heartFull = Identifier.fromNamespaceAndPath("minecraft", "hud/heart/full");
+        //?} else {
+        /*ResourceLocation heartEmpty = ResourceLocation.fromNamespaceAndPath("minecraft", "hud/heart/container");
+        ResourceLocation heartFull = ResourceLocation.fromNamespaceAndPath("minecraft", "hud/heart/full");*/
+        //?}
         favoriteButton = new FavoriteHeartButton(btnX, middleY, 20, heartEmpty, heartFull, b -> toggleFavorite());
         widgetAdder.accept(favoriteButton.getButton());
 
@@ -238,7 +252,7 @@ public class SkinPreviewPanel {
 
         // --- CAPE LOGIC ---
         // Only show capes provided by the selected skin
-        Identifier capeToUse = (selectedSkin != null) ? selectedSkin.capeIdentifier : null;
+        var capeToUse = (selectedSkin != null) ? selectedSkin.capeIdentifier : null;
         // Always set, including null, to ensure clearing when skin has no cape
         dummyPlayer.setForcedCape(capeToUse);
     }
@@ -376,7 +390,11 @@ public class SkinPreviewPanel {
         int centerY = entityY + availableHeight / 2 + 15;
 
         if (dummyPlayer != null) {
+            //? if >=1.21.11 {
             dummyPlayer.tickCount = (int)(Util.getMillis() / 50L);
+            //?} else {
+            dummyPlayer.tickCount = (int)(Util.getMillis() / 50L);
+            //?}
             
             // Update rotation when dragging
             if (isDraggingPreview) {
@@ -459,6 +477,7 @@ public class SkinPreviewPanel {
         return new byte[0];
     }
     
+    //? if >=1.21.11 {
     private static class FavoriteHeartButton {
         private final Button button;
         private final Identifier containerSprite;
@@ -474,34 +493,51 @@ public class SkinPreviewPanel {
             this.button.setPosition(x, y);
         }
         
-        public AbstractWidget getButton() {
-            return button;
-        }
-        
-        public void setSelected(boolean selected) {
-            this.isFavorited = selected;
-        }
-        
-        public void setActive(boolean active) {
-            button.active = active;
-        }
-        
-        public void setTooltip(Component tooltip) {
-            button.setTooltip(Tooltip.create(tooltip));
-        }
+        public AbstractWidget getButton() { return button; }
+        public void setSelected(boolean selected) { this.isFavorited = selected; }
+        public void setActive(boolean active) { button.active = active; }
+        public void setTooltip(Component tooltip) { button.setTooltip(Tooltip.create(tooltip)); }
         
         public void renderSprites(GuiGraphics graphics) {
-            // Always render the container sprite (centered in 20x20 button)
             if (button.visible) {
                 graphics.blitSprite(RenderPipelines.GUI_TEXTURED, containerSprite, button.getX() + 4, button.getY() + 4, 12, 12);
-                
-                // Render the full heart on top if favorited
                 if (isFavorited) {
                     graphics.blitSprite(RenderPipelines.GUI_TEXTURED, fullSprite, button.getX() + 4, button.getY() + 4, 12, 12);
                 }
             }
         }
     }
+    //?} else {
+    /*private static class FavoriteHeartButton {
+        private final Button button;
+        private final ResourceLocation containerSprite;
+        private final ResourceLocation fullSprite;
+        private boolean isFavorited = false;
+        
+        public FavoriteHeartButton(int x, int y, int size, ResourceLocation containerSprite, ResourceLocation fullSprite, Button.OnPress onPress) {
+            this.containerSprite = containerSprite;
+            this.fullSprite = fullSprite;
+            this.button = Button.builder(Component.empty(), onPress)
+                .size(size, size)
+                .build();
+            this.button.setPosition(x, y);
+        }
+        
+        public AbstractWidget getButton() { return button; }
+        public void setSelected(boolean selected) { this.isFavorited = selected; }
+        public void setActive(boolean active) { button.active = active; }
+        public void setTooltip(Component tooltip) { button.setTooltip(Tooltip.create(tooltip)); }
+        
+        public void renderSprites(GuiGraphics graphics) {
+            if (button.visible) {
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, containerSprite, button.getX() + 4, button.getY() + 4, 12, 12);
+                if (isFavorited) {
+                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED, fullSprite, button.getX() + 4, button.getY() + 4, 12, 12);
+                }
+            }
+        }
+    }*/
+    //?}
 
 
 }

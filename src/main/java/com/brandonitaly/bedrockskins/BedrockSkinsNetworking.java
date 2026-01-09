@@ -6,13 +6,21 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 
 public final class BedrockSkinsNetworking {
     private BedrockSkinsNetworking() {}
 
     public static final class SkinUpdatePayload implements CustomPacketPayload {
+        //? if >=1.21.11 {
         public static final CustomPacketPayload.Type<SkinUpdatePayload> ID = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("bedrockskins", "skin_update"));
+        //?} else {
+        /*public static final CustomPacketPayload.Type<SkinUpdatePayload> ID = new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("bedrockskins", "skin_update"));*/
+        //?}
         public static final StreamCodec<RegistryFriendlyByteBuf, SkinUpdatePayload> CODEC = StreamCodec.composite(
             UUIDUtil.STREAM_CODEC, SkinUpdatePayload::getUuid,
             ByteBufCodecs.stringUtf8(32767), SkinUpdatePayload::getSkinKey,
@@ -65,7 +73,11 @@ public final class BedrockSkinsNetworking {
     }
 
     public static final class SetSkinPayload implements CustomPacketPayload {
+        //? if >=1.21.11 {
         public static final CustomPacketPayload.Type<SetSkinPayload> ID = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("bedrockskins", "set_skin"));
+        //?} else {
+        /*public static final CustomPacketPayload.Type<SetSkinPayload> ID = new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("bedrockskins", "set_skin"));*/
+        //?}
         public static final StreamCodec<RegistryFriendlyByteBuf, SetSkinPayload> CODEC = StreamCodec.composite(
             ByteBufCodecs.stringUtf8(32767), SetSkinPayload::getSkinKey,
             ByteBufCodecs.stringUtf8(262144), SetSkinPayload::getGeometry,

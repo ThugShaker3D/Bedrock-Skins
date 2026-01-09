@@ -15,7 +15,11 @@ import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
@@ -44,7 +48,11 @@ public class BedrockSkinsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         //? if >1.21.8 {
+        //? if >=1.21.11 {
         keybindCategory = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("bedrockskins", "controls"));
+        //?} else {
+        /*keybindCategory = KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("bedrockskins", "controls"));*/
+        //?}
         //?}
         registerKeyBinding();
         registerCustomizationKeybinds();
@@ -174,9 +182,15 @@ public class BedrockSkinsClient implements ClientModInitializer {
 
     private final class Reloader implements IdentifiableResourceReloadListener, ResourceManagerReloadListener {
         @Override
+        //? if >=1.21.11 {
         public Identifier getFabricId() {
             return Identifier.fromNamespaceAndPath("bedrockskins", "reloader");
         }
+        //?} else {
+        /*public ResourceLocation getFabricId() {
+            return ResourceLocation.fromNamespaceAndPath("bedrockskins", "reloader");
+        }*/
+        //?}
 
         @Override
         public void onResourceManagerReload(ResourceManager manager) {
