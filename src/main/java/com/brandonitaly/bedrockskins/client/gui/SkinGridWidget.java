@@ -21,6 +21,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 public class SkinGridWidget extends ObjectSelectionList<SkinGridWidget.SkinRowEntry> {
 
@@ -184,6 +189,10 @@ public class SkinGridWidget extends ObjectSelectionList<SkinGridWidget.SkinRowEn
             private final UUID uuid = UUID.randomUUID();
             private final String name;
 
+            // Hover rotation state
+            private float hoverYaw = 0f; // degrees
+            private long lastHoverTime = Util.getMillis();
+
             private static final Identifier EQUIPPED_BORDER = Identifier.fromNamespaceAndPath("bedrockskins", "container/equipped_item_border");
 
             public SkinCell(LoadedSkin skin) {
@@ -240,10 +249,92 @@ public class SkinGridWidget extends ObjectSelectionList<SkinGridWidget.SkinRowEn
                 drawBorder(context, x, y, w, h, borderColor);
 
                 if (player != null) {
+                    // Update hover rotation state (increment while hovered, reset instantly when not hovered)
+                    long now = Util.getMillis();
+                    long dt = Math.max(0, now - lastHoverTime);
+                    lastHoverTime = now;
+                    if (hovered) {
+                        // rotate clockwise at ~30 deg/sec
+                        hoverYaw += dt * 0.03f;
+                        if (hoverYaw > 360f) hoverYaw -= 360f;
+                    } else {
+                        // reset instantly
+                        hoverYaw = 0f;
+                    }
+
                     float pX = x + w / 2.0f;
                     float pY = y + h / 2.0f;
-                    // Draw entity with simplified args
-                    InventoryScreen.renderEntityInInventoryFollowsMouse(context, x + 2, y + 2, x + w - 2, y + h - 4, 30, 0.0625f, pX, pY, player);
+
+                    // Save entity state
+                    float yBodyRot = player.yBodyRot;
+                    float yRot = player.getYRot();
+                    float yRotO = player.yRotO;
+                    float yBodyRotO = player.yBodyRotO;
+                    float xRot = player.getXRot();
+                    float xRotO = player.xRotO;
+                    float yHeadRotO = player.yHeadRotO;
+                    float yHeadRot = player.yHeadRot;
+                    Vec3 vel = player.getDeltaMovement();
+
+                    // Apply rotation
+                    player.yBodyRot = (180.0F + hoverYaw);
+                    player.setYRot(180.0F + hoverYaw);
+                    player.yBodyRotO = player.yBodyRot;
+                    player.yRotO = player.getYRot();
+                    player.setDeltaMovement(Vec3.ZERO);
+                    player.setXRot(0);
+                    player.xRotO = player.getXRot();
+                    player.yHeadRot = player.getYRot();
+                    player.yHeadRotO = player.getYRot();
+
+                    // Custom render using submitEntityRenderState so hover rotation is preserved
+                    EntityRenderDispatcher entityRenderDispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
+                    var entityRenderer = entityRenderDispatcher.getRenderer(player);
+                    var entityRenderState = entityRenderer.createRenderState(player, 1.0F);
+                    // full bright lighting and no hitbox
+                    entityRenderState.lightCoords = 15728880;
+                    entityRenderState.boundingBoxHeight = 0;
+                    entityRenderState.boundingBoxWidth = 0;
+
+                    // Calculate scale/position
+                    int size = Math.min((int)(h / 2.75), 72);
+                    float scale = player.getScale();
+                    Vector3f vector3f = new Vector3f(0.0F, player.getBbHeight() / 2.0F, 0.0F);
+                    float renderScale = (float) size / scale;
+
+                    // Setup quaternions for orientation
+                    Quaternionf quaternion = new Quaternionf().rotationZ((float)Math.toRadians(180.0F));
+                    Quaternionf quaternion2 = new Quaternionf().rotationX(0);
+                    quaternion.mul(quaternion2);
+                    quaternion2.conjugate();
+
+                    // Center coordinates for rendering
+                    int centerX = x + (w / 2);
+                    int centerY = y + (h / 2);
+
+                    // Submit entity render state using the cell's centered bounds
+                    context.submitEntityRenderState(
+                        entityRenderState,
+                        renderScale,
+                        vector3f,
+                        quaternion,
+                        quaternion2,
+                        (int)(centerX - (w / 2)),
+                        (int)(centerY - (h / 2)),
+                        (int)(centerX + (w / 2)),
+                        (int)(centerY + (h / 2))
+                    );
+
+                    // Restore entity state
+                    player.yBodyRot = yBodyRot;
+                    player.yBodyRotO = yBodyRotO;
+                    player.setYRot(yRot);
+                    player.yRotO = yRotO;
+                    player.setXRot(xRot);
+                    player.xRotO = xRotO;
+                    player.yHeadRotO = yHeadRotO;
+                    player.yHeadRot = yHeadRot;
+                    player.setDeltaMovement(vel);
                 }
 
                 // If this skin is currently equipped by the local player, draw the nine-sliced equipped border on top
