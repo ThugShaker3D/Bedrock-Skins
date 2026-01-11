@@ -412,17 +412,16 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
                 if (playerSkinWidgetList != null && playerSkinWidgetList.element3 != null) {
                     SkinReference ref = playerSkinWidgetList.element3.skinRef.get();
                     if (ref != null) {
-                        // Check favorites status safely
-                        if (FavoritesManager.getFavoriteKeys().contains(ref.packId() + ":" + ref.ordinal())) {
-                             // Note: this assumes key format. Safer to check via SkinManager if possible, 
-                             // but ref check is fast. Ideally we get the skin.
-                             SkinPackAdapter p = SkinPackAdapter.getPack(ref.packId());
-                             if (p != null) {
-                                 LoadedSkin s = p.getSkin(ref.ordinal());
-                                 if (s != null && FavoritesManager.isFavorite(s)) {
-                                     return Component.translatable("bedrockskins.button.unfavorite");
-                                 }
-                             }
+                        SkinPackAdapter p = SkinPackAdapter.getPack(ref.packId());
+                        if (p != null) {
+                            LoadedSkin s = p.getSkin(ref.ordinal());
+                            if (s != null) {
+                                if (FavoritesManager.isFavorite(s)) {
+                                    return Component.translatable("bedrockskins.button.unfavorite");
+                                } else {
+                                    return Component.translatable("bedrockskins.button.favorite");
+                                }
+                            }
                         }
                     }
                 }
