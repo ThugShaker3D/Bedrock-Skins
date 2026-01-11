@@ -17,6 +17,8 @@ repositories {
     mavenCentral()
     maven("https://maven.fabricmc.net/")
     maven("https://maven.terraformersmc.com/releases/")
+    maven("https://maven.wispforest.io/releases/")
+    maven("https://api.modrinth.com/maven")
 }
 
 dependencies {
@@ -26,6 +28,10 @@ dependencies {
     modImplementation("net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${project.property("deps.fabric_api")}")
     modImplementation("com.terraformersmc:modmenu:${project.property("deps.modmenu_version")}")
+    
+    // Legacy4J integration
+    modCompileOnly("maven.modrinth:legacy4j:1.21.10-1.8.7+fabric")
+    modCompileOnly("maven.modrinth:factory-api:1.21.10-2.2.7+fabric")
 }
 
 java {

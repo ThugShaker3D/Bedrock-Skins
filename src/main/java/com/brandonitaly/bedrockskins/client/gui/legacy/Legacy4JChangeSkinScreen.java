@@ -1,0 +1,767 @@
+package com.brandonitaly.bedrockskins.client.gui.legacy;
+
+import com.brandonitaly.bedrockskins.BedrockSkinsNetworking;
+import com.brandonitaly.bedrockskins.client.FavoritesManager;
+import com.brandonitaly.bedrockskins.client.SkinManager;
+import com.brandonitaly.bedrockskins.pack.AssetSource;
+import com.brandonitaly.bedrockskins.pack.LoadedSkin;
+import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
+import com.brandonitaly.bedrockskins.pack.StringUtils;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+//? if <1.21.11 {
+/*import net.minecraft.Util;
+*///?}
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.network.chat.Component;
+//? if >=1.21.11 {
+import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.ChatFormatting;
+import wily.legacy.Legacy4J;
+import wily.legacy.client.ControlType;
+import wily.legacy.client.controller.BindingState;
+import wily.legacy.client.controller.Controller;
+import wily.legacy.client.controller.ControllerBinding;
+import wily.legacy.client.screen.ControlTooltip;
+import wily.legacy.client.screen.LegacyScrollRenderer;
+import wily.legacy.client.screen.Panel;
+import wily.legacy.client.screen.PanelVListScreen;
+import wily.legacy.client.screen.ScrollableRenderer;
+import wily.legacy.init.LegacyRegistries;
+import wily.legacy.util.LegacySprites;
+import net.minecraft.client.renderer.RenderPipelines;
+
+import java.util.*;
+
+/**
+ * Legacy4J-styled carousel skin selection screen for Bedrock Skins.
+ * Adapted from legacy-skins ChangeSkinScreen.
+ */
+public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Controller.Event, ControlTooltip.Event {
+    protected final Minecraft minecraft;
+    protected final Panel tooltipBox = Panel.tooltipBoxOf(panel, 350 + 50);
+    protected ScrollableRenderer scrollableRenderer = new ScrollableRenderer(new LegacyScrollRenderer());
+    private String focusedPackId;
+    private SkinPackAdapter focusedPack;
+    private List<String> sortedPackIds = new ArrayList<>();
+    private PlayerSkinWidgetList playerSkinWidgetList;
+    private final Map<String, Button> packButtons = new HashMap<>();
+    private boolean queuedChangeSkinPack = false;
+    private Renderable scissorStart = null;
+    private Renderable scissorEnd = null;
+    
+    // Maintain a map of all packs so we can update Favorites dynamically
+    private final Map<String, SkinPackAdapter> allPacks = new HashMap<>();
+
+    public Legacy4JChangeSkinScreen(Screen parent) {
+        super(parent, 180, 290, Component.translatable("bedrockskins.gui.title"));
+        renderableVList.layoutSpacing(l -> 0);
+        minecraft = Minecraft.getInstance();
+        
+        // Load initial packs
+        Map<String, SkinPackAdapter> initialPacks = SkinPackAdapter.getAllPacks();
+        this.allPacks.putAll(initialPacks);
+        
+        // Sort packs using packOrder
+        sortedPackIds = new ArrayList<>(allPacks.keySet());
+        sortedPackIds.sort((k1, k2) -> {
+            int i1 = SkinPackLoader.packOrder.indexOf(k1);
+            int i2 = SkinPackLoader.packOrder.indexOf(k2);
+            if (i1 != -1 && i2 != -1) return Integer.compare(i1, i2);
+            if (i1 != -1) return -1;
+            if (i2 != -1) return 1;
+            return k1.compareToIgnoreCase(k2);
+        });
+        // Always add Favorites pack at the beginning
+        sortedPackIds.add(0, "skinpack.Favorites");
+        
+        // Create favorites pack by collecting favorited skins
+        rebuildFavoritesPack();
+        
+        for (String packId : sortedPackIds) {
+            SkinPackAdapter pack;
+            String displayName;
+            String translationKey;
+            String fallbackName;
+            
+            // We use a supplier or look up from allPacks dynamically in the button action
+            // to ensure we always get the latest version of the pack (crucial for Favorites)
+            
+            if ("skinpack.Favorites".equals(packId)) {
+                pack = allPacks.get(packId); // Initial get
+                displayName = Component.translatable("bedrockskins.gui.favorites").getString();
+                translationKey = displayName;
+                fallbackName = displayName;
+            } else {
+                pack = allPacks.get(packId);
+                if (pack == null || pack.isEmpty()) continue;
+                
+                // Use the safe pack name from the first skin for translation
+                translationKey = packId;
+                fallbackName = packId;
+                if (pack.size() > 0) {
+                    LoadedSkin firstSkin = pack.getSkin(0);
+                    if (firstSkin != null) {
+                        translationKey = firstSkin.getSafePackName();
+                        fallbackName = firstSkin.getPackDisplayName();
+                    }
+                }
+                displayName = SkinPackLoader.getTranslation(translationKey);
+                if (displayName == null) displayName = fallbackName;
+            }
+            
+            final String btnLabel = displayName;
+            final String currentPackId = packId;
+            
+            Button button = Button.builder(Component.literal(btnLabel), b -> {
+                if (focusedPackId != null && focusedPackId.equals(currentPackId)) return;
+                
+                Legacy4JChangeSkinScreen.this.focusedPackId = currentPackId;
+                // Look up the pack from the map to ensure we get the freshest version (for Favorites)
+                Legacy4JChangeSkinScreen.this.focusedPack = Legacy4JChangeSkinScreen.this.allPacks.get(currentPackId);
+                
+                queuedChangeSkinPack = true;
+            })
+                .pos(0, 0)
+                .size(260, 20)
+                .build();
+            packButtons.put(packId, button);
+            renderableVList.addRenderable(button);
+        }
+        
+        openToCurrentSkin();
+    }
+    
+    private void rebuildFavoritesPack() {
+        List<LoadedSkin> favs = new ArrayList<>();
+        for (String key : FavoritesManager.getFavoriteKeys()) {
+            LoadedSkin s = SkinPackLoader.loadedSkins.get(key);
+            if (s != null) favs.add(s);
+        }
+        allPacks.put("skinpack.Favorites", new SkinPackAdapter("skinpack.Favorites", favs));
+    }
+
+    // Keyboard input handled by default; controller handling via bindingStateTick.
+
+    private void selectSkin() {
+        if (this.playerSkinWidgetList != null && this.playerSkinWidgetList.element3 != null) {
+            SkinReference ref = this.playerSkinWidgetList.element3.skinRef.get();
+            if (ref == null) return;
+            
+            // Resolve skin from the correct pack
+            SkinPackAdapter pack = SkinPackAdapter.getPack(ref.packId());
+            if (pack == null) return; 
+            
+            LoadedSkin skin = pack.getSkin(ref.ordinal());
+            if (skin == null) return;
+            
+            try {
+                String skinKey = skin.getKey();
+                SkinManager.setSkin(minecraft.player.getUUID().toString(), skin.getPackDisplayName(), skin.getSkinDisplayName());
+                
+                // Load texture data
+                byte[] textureData = new byte[0];
+                // TODO: Load actual texture data if needed for networking
+                
+                ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(
+                    skinKey, 
+                    skin.getGeometryData().toString(), 
+                    textureData
+                ));
+                
+                playUISound();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+        int keyCode = InputConstants.getKey(event).getValue();
+
+        // Handle pack list navigation (up/down) with legacy parity
+        if (focusedPackId != null && !sortedPackIds.isEmpty()) {
+            int currentIndex = sortedPackIds.indexOf(focusedPackId);
+            if (keyCode == InputConstants.KEY_UP) {
+                int newIndex = (currentIndex > 0) ? currentIndex - 1 : 0;
+                if (newIndex != currentIndex) {
+                    String newPackId = sortedPackIds.get(newIndex);
+                    focusedPackId = newPackId;
+                    focusedPack = allPacks.get(newPackId);
+                    queuedChangeSkinPack = true;
+                    Button btn = packButtons.get(newPackId);
+                    if (btn != null) {
+                        setFocused(btn);
+                        ensureButtonVisible(btn);
+                    }
+                    playScrollSound();
+                    return true;
+                }
+            } else if (keyCode == InputConstants.KEY_DOWN) {
+                int newIndex = (currentIndex < sortedPackIds.size() - 1) ? currentIndex + 1 : sortedPackIds.size() - 1;
+                if (newIndex != currentIndex) {
+                    String newPackId = sortedPackIds.get(newIndex);
+                    focusedPackId = newPackId;
+                    focusedPack = allPacks.get(newPackId);
+                    queuedChangeSkinPack = true;
+                    Button btn = packButtons.get(newPackId);
+                    if (btn != null) {
+                        setFocused(btn);
+                        ensureButtonVisible(btn);
+                    }
+                    playScrollSound();
+                    return true;
+                }
+            }
+        }
+
+        if (playerSkinWidgetList != null && focusedPackId != null) {
+            Button focused = packButtons.get(focusedPackId);
+            if (focused != null) setFocused(focused);
+        }
+
+        if (keyCode == InputConstants.KEY_RETURN) {
+            selectSkin();
+            return true;
+        }
+        if (keyCode == InputConstants.KEY_F) {
+            favorite();
+            return true;
+        }
+        if (control(keyCode == InputConstants.KEY_LBRACKET, keyCode == InputConstants.KEY_RBRACKET)) return true;
+        if (control(keyCode == InputConstants.KEY_LEFT, keyCode == InputConstants.KEY_RIGHT)) return true;
+        if (handlePoseChange(keyCode == InputConstants.KEY_LSHIFT, keyCode == InputConstants.KEY_RSHIFT)) return true;
+
+        return super.keyPressed(event);
+    }
+
+    /**
+     * Ensures the given button is visible in the renderableVList.
+     * Scrolls the list until the button is visible.
+     */
+    private void ensureButtonVisible(Button button) {
+        // Try to scroll to the button, legacy style
+        // Custom logic: scroll to bottom, then up until button is visible
+        int safety = 0;
+        // Scroll to bottom first: keep scrolling down until the last button is visible
+        List<Button> allButtons = new ArrayList<>(packButtons.values());
+        if (allButtons.isEmpty()) return;
+        Button lastButton = allButtons.get(allButtons.size() - 1);
+        while (!this.children().contains(lastButton) && safety++ < 500) {
+            renderableVList.mouseScrolled(true);
+        }
+        safety = 0;
+        // Now scroll up until the target button is visible
+        while (!this.children().contains(button) && safety++ < 500) {
+            renderableVList.mouseScrolled(false);
+        }
+    }
+
+    // Click handling moved to keyboard/controller; avoids API mismatch on 1.21.10
+    
+    private boolean isInBounds(double mouseX, double mouseY, int x, int y, int width, int height) {
+        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+    }
+
+    boolean handlePoseChange(boolean left, boolean right) {
+        if (!(left || right)) return false;
+        if (playerSkinWidgetList == null || playerSkinWidgetList.element3 == null) return false;
+        if (playerSkinWidgetList.element3.isInterpolating()) return false;
+
+        // Toggle pose (stand/crouch) on the focused widget
+        playerSkinWidgetList.element3.togglePose();
+        return true;
+    }
+
+    boolean control(boolean left, boolean right) {
+        if ((left || right)) {
+            if (this.playerSkinWidgetList != null) {
+                if (this.playerSkinWidgetList.widgets.stream().anyMatch(a -> a.progress <= 1)) return true;
+                int offset = 0;
+                if (left) offset--;
+                if (right) offset++;
+                this.playerSkinWidgetList.sortForIndex(this.playerSkinWidgetList.index + offset);
+                playScrollSound();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void bindingStateTick(BindingState state) {
+        if (state.is(ControllerBinding.UP_BUTTON) && state.released) {
+            favorite();
+        }
+        if (state.is(ControllerBinding.RIGHT_STICK_BUTTON) && state.justPressed) {
+            if (handlePoseChange(true, false)) return;
+        }
+    }
+
+    private void favorite() {
+        if (this.playerSkinWidgetList != null && this.playerSkinWidgetList.element3 != null) {
+            SkinReference ref = this.playerSkinWidgetList.element3.skinRef.get();
+            if (ref == null) return;
+            
+            // Always resolve from the original pack to ensure we get the correct skin to favorite
+            SkinPackAdapter originalPack = SkinPackAdapter.getPack(ref.packId());
+            if (originalPack == null) return;
+            
+            LoadedSkin skin = originalPack.getSkin(ref.ordinal());
+            if (skin == null) return;
+
+            boolean wasFavorite = FavoritesManager.isFavorite(skin);
+            int oldIndex = playerSkinWidgetList != null ? playerSkinWidgetList.index : 0;
+            if (wasFavorite) {
+                FavoritesManager.removeFavorite(skin);
+            } else {
+                FavoritesManager.addFavorite(skin);
+            }
+            
+            // Rebuild the favorites pack in the map
+            rebuildFavoritesPack();
+
+            // Instantly update the Favorites tab if it's currently active
+            if ("skinpack.Favorites".equals(focusedPackId)) {
+                // Update our local reference to the new pack
+                this.focusedPack = allPacks.get("skinpack.Favorites");
+                
+                int favCount = this.focusedPack.size();
+                int newIndex = oldIndex;
+                
+                if (!wasFavorite) {
+                    // If we just added a favorite, we might want to select it
+                    // But usually staying put or going to end is fine. 
+                    // Logic: If added, it goes to end of list.
+                    newIndex = favCount - 1;
+                } else {
+                    // If we just removed, try to keep the same index, but clamp
+                    if (favCount == 0) {
+                        newIndex = 0;
+                    } else if (newIndex >= favCount) {
+                        newIndex = favCount - 1;
+                    }
+                }
+                updateSkinPack(newIndex);
+            }
+
+            playUISound();
+        }
+    }
+
+    @Override
+    public void addControlTooltips(ControlTooltip.Renderer renderer) {
+        // Select
+        renderer.add(
+            () -> ControlType.getActiveType().isKbm() ? 
+                ControlTooltip.getKeyIcon(InputConstants.KEY_RETURN) : 
+                ControllerBinding.DOWN_BUTTON.bindingState.getIcon(), 
+            () -> Component.translatable("bedrockskins.button.select")
+        );
+        // Cancel
+        renderer.add(
+            () -> ControlType.getActiveType().isKbm() ? 
+                ControlTooltip.getKeyIcon(InputConstants.KEY_ESCAPE) : 
+                ControllerBinding.RIGHT_BUTTON.bindingState.getIcon(), 
+            () -> Component.translatable("gui.cancel")
+        );
+        // Favorite/Unfavorite
+        renderer.add(
+            () -> ControlType.getActiveType().isKbm() ? 
+                ControlTooltip.getKeyIcon(InputConstants.KEY_F) : 
+                ControllerBinding.UP_BUTTON.bindingState.getIcon(), 
+            () -> {
+                if (playerSkinWidgetList != null && playerSkinWidgetList.element3 != null) {
+                    SkinReference ref = playerSkinWidgetList.element3.skinRef.get();
+                    if (ref != null) {
+                        // Check favorites status safely
+                        if (FavoritesManager.getFavoriteKeys().contains(ref.packId() + ":" + ref.ordinal())) {
+                             // Note: this assumes key format. Safer to check via SkinManager if possible, 
+                             // but ref check is fast. Ideally we get the skin.
+                             SkinPackAdapter p = SkinPackAdapter.getPack(ref.packId());
+                             if (p != null) {
+                                 LoadedSkin s = p.getSkin(ref.ordinal());
+                                 if (s != null && FavoritesManager.isFavorite(s)) {
+                                     return Component.translatable("bedrockskins.button.unfavorite");
+                                 }
+                             }
+                        }
+                    }
+                }
+                return Component.translatable("bedrockskins.button.favorite");
+            }
+        );
+        // Compound left/right navigation icon
+        renderer.add(
+            () -> ControlType.getActiveType().isKbm() ? 
+                ControlTooltip.COMPOUND_ICON_FUNCTION.apply(new ControlTooltip.Icon[]{
+                    ControlTooltip.getKeyIcon(InputConstants.KEY_LEFT),
+                    ControlTooltip.SPACE_ICON,
+                    ControlTooltip.getKeyIcon(InputConstants.KEY_RIGHT)
+                }) : ControllerBinding.LEFT_STICK.bindingState.getIcon(),
+            () -> Component.translatable("bedrockskins.menu.navigate")
+        );
+    }
+
+    @Override
+    public void renderDefaultBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        if (queuedChangeSkinPack) {
+            queuedChangeSkinPack = false;
+            updateSkinPack();
+        }
+        
+        // Render background panels
+        renderBackgroundPanels(guiGraphics);
+        
+        // Render pack name
+        if (focusedPackId != null) {
+            renderPackName(guiGraphics);
+        }
+        
+        // Render skin name and info
+        if (playerSkinWidgetList != null && playerSkinWidgetList.element3 != null) {
+            renderSkinInfo(guiGraphics);
+        }
+    }
+    
+    private void renderBackgroundPanels(GuiGraphics guiGraphics) {
+        // Render using blitSprite for nine-slice sprite atlas
+        //? if >=1.21.11 {
+        var skinPanel = Identifier.fromNamespaceAndPath("bedrockskins", "tiles/skin_panel");
+        var panelFiller = Identifier.fromNamespaceAndPath("bedrockskins", "tiles/panel_filler");
+        var recessedPanel = Identifier.fromNamespaceAndPath(Legacy4J.MOD_ID, "tiles/square_recessed_panel");
+        var packNameBox = Identifier.fromNamespaceAndPath("bedrockskins", "tiles/pack_name_box");
+        var skinBox = Identifier.fromNamespaceAndPath("bedrockskins", "tiles/skin_box");
+        //?} else {
+        /*
+        var skinPanel = ResourceLocation.fromNamespaceAndPath("bedrockskins", "tiles/skin_panel");
+        var panelFiller = ResourceLocation.fromNamespaceAndPath("bedrockskins", "tiles/panel_filler");
+        var recessedPanel = ResourceLocation.fromNamespaceAndPath(Legacy4J.MOD_ID, "tiles/square_recessed_panel");
+        var packNameBox = ResourceLocation.fromNamespaceAndPath("bedrockskins", "tiles/pack_name_box");
+        var skinBox = ResourceLocation.fromNamespaceAndPath("bedrockskins", "tiles/skin_box");
+        */
+        //?}
+
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, skinPanel,
+            tooltipBox.getX() - 10, panel.getY() + 7,
+            tooltipBox.getWidth(), tooltipBox.getHeight() - 2);
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, panelFiller,
+            tooltipBox.getX() - 5, panel.getY() + 16 + tooltipBox.getHeight() - 80,
+            tooltipBox.getWidth() - 14, 60);
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, recessedPanel,
+            tooltipBox.getX() - 1, panel.getY() + tooltipBox.getHeight() - 59,
+            tooltipBox.getWidth() - 55, 55);
+
+        // Icons background
+        //? if >=1.21.11 {
+        var iconHolder = Identifier.fromNamespaceAndPath(Legacy4J.MOD_ID, "container/sizeable_icon_holder");
+        //?} else {
+        /*
+        var iconHolder = ResourceLocation.fromNamespaceAndPath(Legacy4J.MOD_ID, "container/sizeable_icon_holder");
+        */
+        //?}
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, iconHolder,
+            tooltipBox.getX() + tooltipBox.getWidth() - 50,
+            panel.getY() + tooltipBox.getHeight() - 60 + 3,
+            24, 24);
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, iconHolder,
+            tooltipBox.getX() + tooltipBox.getWidth() - 50,
+            panel.getY() + tooltipBox.getHeight() - 60 + 30,
+            24, 24);
+
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, packNameBox,
+            tooltipBox.getX() - 5, panel.getY() + 16 + 4,
+            tooltipBox.getWidth() - 18, 40);
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, skinBox,
+            tooltipBox.getX() - 5, panel.getY() + 16,
+            tooltipBox.getWidth() - 14, tooltipBox.getHeight() - 80);
+    }
+    
+    private void renderPackName(GuiGraphics guiGraphics) {
+        int x = tooltipBox.getX() - 5;
+        int width = tooltipBox.getWidth() - 18;
+        int middle = x + width / 2;
+        
+        String packDisplayName;
+        
+        // Special handling for Favorites pack
+        if ("skinpack.Favorites".equals(focusedPackId)) {
+            packDisplayName = Component.translatable("bedrockskins.gui.favorites").getString();
+        } else {
+            String translationKey = focusedPackId;
+            String fallbackName = focusedPackId;
+            if (focusedPack != null && focusedPack.size() > 0) {
+                LoadedSkin firstSkin = focusedPack.getSkin(0);
+                if (firstSkin != null) {
+                    translationKey = firstSkin.getSafePackName();
+                    fallbackName = firstSkin.getPackDisplayName();
+                }
+            }
+            packDisplayName = SkinPackLoader.getTranslation(translationKey);
+            if (packDisplayName == null) packDisplayName = fallbackName;
+        }
+        
+        guiGraphics.drawCenteredString(
+            minecraft.font,
+            Component.literal(packDisplayName),
+            middle,
+            panel.getY() + 16 + 4 + 7,
+            0xffffffff
+        );
+    }
+    
+    private void renderSkinInfo(GuiGraphics guiGraphics) {
+        SkinReference ref = playerSkinWidgetList.element3.skinRef.get();
+        if (ref == null) return;
+        
+        // FIX: Retrieve the skin using the pack ID from the reference, not the focusedPack
+        // This ensures mismatch does not occur when looking at Favorites
+        SkinPackAdapter pack = SkinPackAdapter.getPack(ref.packId());
+        if (pack == null) return;
+
+        LoadedSkin skin = pack.getSkin(ref.ordinal());
+        if (skin == null) return;
+        
+        // Render skin name
+        int x = tooltipBox.getX() - 5;
+        int width = tooltipBox.getWidth() - 18;
+        int middle = x + width / 2;
+        
+        String skinName = SkinPackLoader.getTranslation(skin.getSafeSkinName());
+        if (skinName == null) skinName = skin.getSkinDisplayName();
+        guiGraphics.drawCenteredString(minecraft.font, Component.literal(skinName), middle, panel.getY() + tooltipBox.getHeight() - 59 + 10, 0xffffffff);
+        
+        // Render checkmark if this skin is currently selected
+        String currentSkinKey = SkinManager.getLocalSelectedKey();
+        if (currentSkinKey != null && currentSkinKey.equals(skin.getKey())) {
+            //? if >=1.21.11 {
+            var beaconCheck = Identifier.fromNamespaceAndPath(Legacy4J.MOD_ID, "container/beacon_check");
+            //?} else {
+            /*
+            var beaconCheck = ResourceLocation.fromNamespaceAndPath(Legacy4J.MOD_ID, "container/beacon_check");
+            */
+            //?}
+            guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, beaconCheck,
+                tooltipBox.getX() + tooltipBox.getWidth() - 50,
+                panel.getY() + tooltipBox.getHeight() - 60 + 3,
+                24, 24);
+        }
+        
+        // Render heart if this skin is favorited
+        if (FavoritesManager.isFavorite(skin)) {
+            //? if >=1.21.11 {
+            var heartContainer = Identifier.fromNamespaceAndPath("minecraft", "hud/heart/container");
+            var heartFull = Identifier.fromNamespaceAndPath("minecraft", "hud/heart/full");
+            //?} else {
+            /*
+            var heartContainer = ResourceLocation.fromNamespaceAndPath("minecraft", "hud/heart/container");
+            var heartFull = ResourceLocation.fromNamespaceAndPath("minecraft", "hud/heart/full");
+            */
+            //?}
+            guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, heartContainer,
+                tooltipBox.getX() + tooltipBox.getWidth() - 50 + 4,
+                panel.getY() + tooltipBox.getHeight() - 60 + 30 + 4,
+                16, 16);
+            guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, heartFull,
+                tooltipBox.getX() + tooltipBox.getWidth() - 50 + 4,
+                panel.getY() + tooltipBox.getHeight() - 60 + 30 + 4,
+                16, 16);
+        }
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        boolean hovered = isInBounds(mouseX, mouseY, tooltipBox.getX(), panel.getY(), tooltipBox.getWidth(), tooltipBox.getHeight());
+        if ((hovered || !ControlType.getActiveType().isKbm()) && 
+            scrollableRenderer.mouseScrolled(scrollY)) {
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
+    public void renderableVListInit() {
+        addRenderableOnly((guiGraphics, i, j, f) ->
+            guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                //? if >=1.21.11 {
+                Identifier.fromNamespaceAndPath(Legacy4J.MOD_ID, "tiles/square_recessed_panel"),
+                //?} else {
+                /*
+                ResourceLocation.fromNamespaceAndPath(Legacy4J.MOD_ID, "tiles/square_recessed_panel"),
+                */
+                //?}
+                panel.getX() + 7, panel.getY() + 7 + 130 - 8,
+                panel.getWidth() - 14, panel.getHeight() - 14 - 135 + 1 + 8));
+        addRenderableOnly((guiGraphics, i, j, f) ->
+            guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                //? if >=1.21.11 {
+                Identifier.fromNamespaceAndPath(Legacy4J.MOD_ID, "tiles/square_recessed_panel"),
+                //?} else {
+                /*
+                ResourceLocation.fromNamespaceAndPath(Legacy4J.MOD_ID, "tiles/square_recessed_panel"),
+                */
+                //?}
+                panel.getX() + 34, panel.getY() + 10, 112, 112));
+        // Removed pack icon rendering
+
+        tooltipBox.init("tooltipBox");
+        getRenderableVList().init("renderableVList", 
+            panel.getX() + 11, panel.getY() + 132, 
+            panel.getWidth() - 22, panel.getHeight() - 135 + 10 - 22);
+    }
+
+    void openToCurrentSkin() {
+        String currentSkinKey = SkinManager.getLocalSelectedKey();
+        if (currentSkinKey == null) {
+            // Open first available pack
+            if (!SkinPackAdapter.getAllPacks().isEmpty()) {
+                String firstPackId = SkinPackAdapter.getAllPacks().keySet().iterator().next();
+                focusedPackId = firstPackId;
+                focusedPack = SkinPackAdapter.getPack(firstPackId);
+                queuedChangeSkinPack = true;
+                updateSkinPack(0);
+            }
+            return;
+        }
+        
+        LoadedSkin currentSkin = SkinPackLoader.loadedSkins.get(currentSkinKey);
+        if (currentSkin == null) return;
+        
+        String packId = currentSkin.getId();
+        SkinPackAdapter pack = SkinPackAdapter.getPack(packId);
+        int skinIndex = pack.indexOf(currentSkin);
+        
+        focusedPackId = packId;
+        focusedPack = pack;
+        queuedChangeSkinPack = true;
+        updateSkinPack(skinIndex);
+        
+        if (packButtons.containsKey(packId)) {
+            setFocused(packButtons.get(packId));
+        }
+    }
+
+    void updateSkinPack() {
+        updateSkinPack(0);
+    }
+    
+    void updateSkinPack(int index) {
+        this.queuedChangeSkinPack = false;
+        
+        // Clear existing widgets
+        if (playerSkinWidgetList != null) {
+            for (PlayerSkinWidget widget : playerSkinWidgetList.widgets) {
+                removeWidget(widget);
+            }
+        }
+
+        if (focusedPack == null || focusedPack.isEmpty()) {
+            playerSkinWidgetList = null;
+            return;
+        }
+
+        // Calculate visual bounds based on skinBox (the background panel)
+        int boxX = tooltipBox.getX() - 5;
+        int boxWidth = tooltipBox.getWidth() - 14;
+        int boxY = panel.getY() + 16;
+        int boxHeight = tooltipBox.getHeight() - 80;
+
+        // The absolute visual center for the widget list
+        int centerX = boxX + boxWidth / 2;
+        int centerY = boxY + boxHeight / 2;
+
+        // Determine Scissor area
+        int scissorLeft = boxX + 7;
+        int scissorRight = boxX + boxWidth - 5;
+        int scissorTop = boxY + 4;
+        int scissorBottom = boxY + boxHeight - 4;
+
+        // Add scissor start - enable clipping for player models
+        scissorStart = addRenderableOnly((guiGraphics, i, j, f) -> {
+            if (playerSkinWidgetList != null) {
+                guiGraphics.enableScissor(scissorLeft, scissorTop, scissorRight, scissorBottom);
+            }
+        });
+
+        // Create skin widgets
+        List<PlayerSkinWidget> widgets = new ArrayList<>();
+        for (int i = 0; i < focusedPack.size(); i++) {
+            final int skinIndex = i;
+            final LoadedSkin skin = focusedPack.getSkin(i);
+            
+            // For favorites pack, we need to get the actual skin from its original pack
+            // For normal packs, we can use the ordinal directly
+            final SkinReference finalRef;
+            if ("skinpack.Favorites".equals(focusedPackId) && skin != null) {
+                // Get the skin's original pack ID and find its ordinal in that pack
+                String originalPackId = skin.getId();
+                SkinPackAdapter originalPack = SkinPackAdapter.getPack(originalPackId);
+                int originalOrdinal = originalPack.indexOf(skin);
+                finalRef = new SkinReference(originalPackId, originalOrdinal);
+            } else {
+                finalRef = new SkinReference(focusedPackId, skinIndex);
+            }
+            
+            PlayerSkinWidget widget = addRenderableWidget(new PlayerSkinWidget(
+                130, 160, 
+                minecraft.getEntityModels(), 
+                () -> finalRef
+            ));
+            widgets.add(widget);
+        }
+
+        // Initialize the list using the precise visual center
+        // -130/2 ensures the center widget is exactly centered at centerX
+        playerSkinWidgetList = PlayerSkinWidgetList.of(
+            centerX - 130 / 2, 
+            centerY - 160 / 2, 
+            widgets.toArray(new PlayerSkinWidget[0])
+        );
+        playerSkinWidgetList.sortForIndex(index);
+
+        // Add scissor end - disable clipping
+        scissorEnd = addRenderableOnly((guiGraphics, i, j, f) -> {
+            if (playerSkinWidgetList != null) {
+                guiGraphics.disableScissor();
+            }
+        });
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        
+        if (playerSkinWidgetList != null && playerSkinWidgetList.element3 != null) {
+            SkinReference ref = playerSkinWidgetList.element3.skinRef.get();
+            if (ref != null) {
+                updateSkinPack(ref.ordinal());
+            }
+        }
+    }
+    
+    private void playUISound() {
+        minecraft.getSoundManager().play(
+            net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                SoundEvents.UI_BUTTON_CLICK.value(), 1.0f
+            )
+        );
+    }
+    
+    private void playScrollSound() {
+        minecraft.getSoundManager().play(
+            net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                LegacyRegistries.SCROLL.get(), 1.0f
+            )
+        );
+    }
+}

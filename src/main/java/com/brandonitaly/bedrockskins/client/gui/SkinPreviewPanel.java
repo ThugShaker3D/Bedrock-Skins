@@ -275,14 +275,6 @@ public class SkinPreviewPanel {
                         key, selectedSkin.getGeometryData().toString(), data
                     ));
                 }
-                
-                String dispName = SkinPackLoader.getTranslation(selectedSkin.getSafeSkinName());
-                if (dispName == null) dispName = selectedSkin.getSkinDisplayName();
-                
-                minecraft.player.displayClientMessage(
-                    Component.translatable("bedrockskins.message.set_skin", dispName).withStyle(ChatFormatting.GREEN), 
-                    true
-                );
             } else {
                 StateManager.saveState(FavoritesManager.getFavoriteKeys(), key);
                 updatePreviewModel(dummyUuid, key);
@@ -299,7 +291,6 @@ public class SkinPreviewPanel {
         if (minecraft.player != null) {
             SkinManager.resetSkin(minecraft.player.getUUID().toString());
             ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0]));
-            minecraft.player.displayClientMessage(Component.translatable("bedrockskins.message.reset_default").withStyle(ChatFormatting.YELLOW), true);
             
             safeResetPreview(this.dummyUuid.toString());
             this.dummyUuid = minecraft.player.getUUID();

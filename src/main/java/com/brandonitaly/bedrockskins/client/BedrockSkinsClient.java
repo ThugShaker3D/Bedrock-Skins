@@ -6,6 +6,7 @@ import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.brandonitaly.bedrockskins.client.gui.SkinSelectionScreen;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -72,7 +73,19 @@ public class BedrockSkinsClient implements ClientModInitializer {
 
             ClientTickEvents.END_CLIENT_TICK.register(client -> {
                 while (openKey.consumeClick()) {
-                    client.setScreen(new SkinSelectionScreen(client.screen));
+                    if (FabricLoader.getInstance().isModLoaded("legacy")) {
+                        try {
+                            // Use reflection to avoid loading Legacy4J classes when the mod isn't present
+                            Class<?> screenClass = Class.forName("com.brandonitaly.bedrockskins.client.gui.legacy.Legacy4JChangeSkinScreen");
+                            var constructor = screenClass.getConstructor(net.minecraft.client.gui.screens.Screen.class);
+                            client.setScreen((net.minecraft.client.gui.screens.Screen) constructor.newInstance(client.screen));
+                        } catch (Exception e) {
+                            // Fallback to standard screen if Legacy4J integration fails
+                            client.setScreen(new SkinSelectionScreen(client.screen));
+                        }
+                    } else {
+                        client.setScreen(new SkinSelectionScreen(client.screen));
+                    }
                 }
             });
             System.out.println("BedrockSkinsClient: Registered keybinding (K)");
