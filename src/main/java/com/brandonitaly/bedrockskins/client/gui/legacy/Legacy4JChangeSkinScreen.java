@@ -38,6 +38,7 @@ import wily.legacy.client.screen.PanelVListScreen;
 import wily.legacy.client.screen.ScrollableRenderer;
 import wily.legacy.init.LegacyRegistries;
 import wily.legacy.util.LegacySprites;
+import wily.legacy.util.client.LegacyRenderUtil;
 import net.minecraft.client.renderer.RenderPipelines;
 
 import java.util.*;
@@ -81,8 +82,8 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
             if (i2 != -1) return 1;
             return k1.compareToIgnoreCase(k2);
         });
-        // Always add Favorites pack at the beginning
-        sortedPackIds.add(0, "skinpack.Favorites");
+        // Always add Favorites pack after the default skin pack
+        sortedPackIds.add(1, "skinpack.Favorites");
         
         // Create favorites pack by collecting favorited skins
         rebuildFavoritesPack();
@@ -415,6 +416,8 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
 
     @Override
     public void renderDefaultBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderUtil.renderDefaultBackground(wily.factoryapi.base.client.UIAccessor.of(this), guiGraphics, false);
+
         if (queuedChangeSkinPack) {
             queuedChangeSkinPack = false;
             updateSkinPack();
@@ -731,7 +734,7 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
         // -130/2 ensures the center widget is exactly centered at centerX
         playerSkinWidgetList = PlayerSkinWidgetList.of(
             centerX - 130 / 2, 
-            centerY - 160 / 2, 
+            centerY - 130 / 2, 
             widgets.toArray(new PlayerSkinWidget[0])
         );
         playerSkinWidgetList.sortForIndex(index);
