@@ -11,10 +11,21 @@ import java.util.*;
 public class SkinPackAdapter {
     private final String packId;
     private final List<LoadedSkin> skins;
-    
-    public SkinPackAdapter(String packId, List<LoadedSkin> skins) {
+    private final String packType;
+
+    public SkinPackAdapter(String packId, List<LoadedSkin> skins, String packType) {
         this.packId = packId;
         this.skins = new ArrayList<>(skins);
+        this.packType = packType;
+    }
+
+    public String getPackType() {
+        return packType;
+    }
+
+    // Legacy constructor for compatibility
+    public SkinPackAdapter(String packId, List<LoadedSkin> skins) {
+        this(packId, skins, null);
     }
     
     public String getPackId() {
@@ -59,18 +70,19 @@ public class SkinPackAdapter {
     public static Map<String, SkinPackAdapter> getAllPacks() {
         Map<String, SkinPackAdapter> packs = new LinkedHashMap<>();
         Map<String, List<LoadedSkin>> packMap = new HashMap<>();
-        
+
         // Group skins by pack ID
         for (LoadedSkin skin : SkinPackLoader.loadedSkins.values()) {
             String packId = skin.getId();
             packMap.computeIfAbsent(packId, k -> new ArrayList<>()).add(skin);
         }
-        
-        // Create adapters
+
+        // Create adapters with packType if available
         for (Map.Entry<String, List<LoadedSkin>> entry : packMap.entrySet()) {
-            packs.put(entry.getKey(), new SkinPackAdapter(entry.getKey(), entry.getValue()));
+            String packType = SkinPackLoader.packTypesByPackId.get(entry.getKey());
+            packs.put(entry.getKey(), new SkinPackAdapter(entry.getKey(), entry.getValue(), packType));
         }
-        
+
         return packs;
     }
     
@@ -84,6 +96,7 @@ public class SkinPackAdapter {
                 skins.add(skin);
             }
         }
-        return new SkinPackAdapter(packId, skins);
+        String packType = SkinPackLoader.packTypesByPackId.get(packId);
+        return new SkinPackAdapter(packId, skins, packType);
     }
 }

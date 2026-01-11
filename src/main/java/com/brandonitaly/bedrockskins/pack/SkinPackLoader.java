@@ -20,6 +20,8 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 
 public final class SkinPackLoader {
+    // Map to store packType by packId
+    public static final Map<String, String> packTypesByPackId = new HashMap<>();
     private SkinPackLoader() {}
 
     private static JsonObject vanillaGeometryJson = null;
@@ -63,6 +65,7 @@ public final class SkinPackLoader {
     public static void loadPacks() {
         loadedSkins.clear();
         translations.clear();
+        packTypesByPackId.clear();
 
         if (skinPacksDir.exists()) {
             File[] children = skinPacksDir.listFiles();
@@ -159,6 +162,20 @@ public final class SkinPackLoader {
             SkinPackManifest manifest = gson.fromJson(new FileReader(skinsFile), SkinPackManifest.class);
             loadExternalTranslations(packDir);
 
+            // Store packType by packId (serializeName), default to 'skin_pack' except for Favorites and Standard
+            if (manifest.getSerializeName() != null) {
+                String packId = "skinpack." + manifest.getSerializeName();
+                String packType = manifest.getPackType();
+                if (packType == null || packType.isEmpty()) {
+                    if (!"Favorites".equals(manifest.getSerializeName()) && !"Standard".equals(manifest.getSerializeName())) {
+                        packType = "skin_pack";
+                    }
+                }
+                if (packType != null) {
+                    packTypesByPackId.put(packId, packType);
+                }
+            }
+
             for (SkinEntry entry : manifest.getSkins()) {
                 JsonObject geometry = resolveGeometry(entry.getGeometry(), geometryJson);
                 if (geometry == null) continue;
@@ -198,6 +215,19 @@ public final class SkinPackLoader {
                 SkinPackManifest manifest;
                 try (InputStream ris = resource.open(); InputStreamReader rr = new InputStreamReader(ris)) {
                     manifest = gson.fromJson(rr, SkinPackManifest.class);
+                }
+                // Store packType by packId (serializeName) for internal packs, default to 'skin_pack' except for Favorites and Standard
+                if (manifest.getSerializeName() != null) {
+                    String packId = "skinpack." + manifest.getSerializeName();
+                    String packType = manifest.getPackType();
+                    if (packType == null || packType.isEmpty()) {
+                        if (!"Favorites".equals(manifest.getSerializeName()) && !"Standard".equals(manifest.getSerializeName())) {
+                            packType = "skin_pack";
+                        }
+                    }
+                    if (packType != null) {
+                        packTypesByPackId.put(packId, packType);
+                    }
                 }
                 String packPath = id.getPath().substring(0, id.getPath().lastIndexOf('/'));
 

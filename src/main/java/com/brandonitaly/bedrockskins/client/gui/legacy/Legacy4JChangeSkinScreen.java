@@ -510,14 +510,21 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
             packDisplayName = SkinPackLoader.getTranslation(translationKey);
             if (packDisplayName == null) packDisplayName = fallbackName;
         }
-        
+
+        int nameY = panel.getY() + 16 + 4 + 7;
         guiGraphics.drawCenteredString(
             minecraft.font,
             Component.literal(packDisplayName),
             middle,
-            panel.getY() + 16 + 4 + 7,
+            nameY,
             0xffffffff
         );
+
+        // Draw subtitle below pack name using Component.translatable so Minecraft handles translation
+        if (focusedPack != null && focusedPack.getPackType() != null && !focusedPack.getPackType().isEmpty()) {
+            String key = "bedrockskins.packType." + focusedPack.getPackType();
+            guiGraphics.drawCenteredString(minecraft.font, Component.translatable(key), middle, nameY + 12, 0xFFAAAAAA);
+        }
     }
     
     private void renderSkinInfo(GuiGraphics guiGraphics) {

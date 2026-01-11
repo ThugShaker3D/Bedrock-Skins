@@ -9,6 +9,8 @@
   "bedrockskins.button.select": "Select Skin",
   "bedrockskins.button.reset": "None",
   "bedrockskins.menu.navigate": "Navigate",
+  "bedrockskins.packType.skin_pack": "Skin Pack",
+  "bedrockskins.packType.mashup_pack": "Mash-up Pack",
   "bedrockskins.button.open_packs": "Open Skin Packs Folder",
   "bedrockskins.preview.unavailable": "Preview unavailable",
 

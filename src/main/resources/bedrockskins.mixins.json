@@ -10,7 +10,8 @@
     "MixinCapeFeatureRenderer",
     "MixinElytraFeatureRenderer",
     "MixinPlayerListEntry",
-    "MixinTranslationStorage"
+    "MixinTranslationStorage",
+    "legacy4j.HelpOptionsMixin"
   ],
   "injectors": {
     "defaultRequire": 1
