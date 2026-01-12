@@ -192,6 +192,13 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
         }
     }
 
+    private void resetSkin() {
+        if (minecraft.player != null) {
+            SkinManager.resetSkin(minecraft.player.getUUID().toString());
+            ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0]));
+        }
+    }
+
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         int keyCode = InputConstants.getKey(event).getValue();
@@ -239,6 +246,10 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
         }
         if (keyCode == InputConstants.KEY_F) {
             favorite();
+            return true;
+        }
+        if (keyCode == InputConstants.KEY_R) {
+            resetSkin();
             return true;
         }
         if (control(keyCode == InputConstants.KEY_LBRACKET, keyCode == InputConstants.KEY_RBRACKET)) return true;
@@ -325,6 +336,10 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
         }
         if (state.is(ControllerBinding.RIGHT_STICK_DOWN) && state.justPressed) {
             if (handlePoseChange(true, false)) return;
+        }
+        if (state.is(ControllerBinding.RIGHT_STICK_BUTTON) && state.justPressed) {
+            resetSkin();
+            return;
         }
     }
 
@@ -429,6 +444,13 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
                     ControlTooltip.getKeyIcon(InputConstants.KEY_RIGHT)
                 }) : ControllerBinding.LEFT_STICK.bindingState.getIcon(),
             () -> Component.translatable("bedrockskins.menu.navigate")
+        );
+        // Reset skin
+        renderer.add(
+            () -> ControlType.getActiveType().isKbm() ? 
+                ControlTooltip.getKeyIcon(InputConstants.KEY_R) : 
+                ControllerBinding.RIGHT_STICK_BUTTON.bindingState.getIcon(), 
+            () -> Component.translatable("bedrockskins.button.reset")
         );
     }
 
