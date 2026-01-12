@@ -196,6 +196,7 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
         if (minecraft.player != null) {
             SkinManager.resetSkin(minecraft.player.getUUID().toString());
             ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0]));
+            playUISound();
         }
     }
 
