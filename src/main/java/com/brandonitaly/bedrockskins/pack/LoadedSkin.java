@@ -1,6 +1,11 @@
 package com.brandonitaly.bedrockskins.pack;
 
 import com.google.gson.JsonObject;
+//? if >=1.21.11 {
+import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 
 public class LoadedSkin {
     public final String serializeName;
@@ -10,8 +15,13 @@ public class LoadedSkin {
     public final AssetSource texture;
     public final AssetSource cape; // nullable
 
-    public net.minecraft.resources.Identifier identifier;
-    public net.minecraft.resources.Identifier capeIdentifier;
+    //? if >=1.21.11 {
+    public Identifier identifier;
+    public Identifier capeIdentifier;
+    //?} else {
+    /*public ResourceLocation identifier;
+    public ResourceLocation capeIdentifier;*/
+    //?}
 
     public LoadedSkin(String serializeName, String packDisplayName, String skinDisplayName, com.google.gson.JsonObject geometryData, AssetSource texture) {
         this(serializeName, packDisplayName, skinDisplayName, geometryData, texture, null);
@@ -42,7 +52,12 @@ public class LoadedSkin {
     public boolean isInternal() { return texture instanceof AssetSource.Resource; }
 
     // Backwards-compatible accessors used by generated mixins and original Kotlin code
-    public net.minecraft.resources.Identifier getIdentifier() { return this.identifier; }
-    public net.minecraft.resources.Identifier getCapeIdentifier() { return this.capeIdentifier; }
+    //? if >=1.21.11 {
+    public Identifier getIdentifier() { return this.identifier; }
+    public Identifier getCapeIdentifier() { return this.capeIdentifier; }
+    //?} else {
+    /*public ResourceLocation getIdentifier() { return this.identifier; }
+    public ResourceLocation getCapeIdentifier() { return this.capeIdentifier; }*/
+    //?}
 }
 

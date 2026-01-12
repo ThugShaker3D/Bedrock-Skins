@@ -11,11 +11,17 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 
 public final class SkinPackLoader {
+    // Map to store packType by packId
+    public static final Map<String, String> packTypesByPackId = new HashMap<>();
     private SkinPackLoader() {}
 
     private static JsonObject vanillaGeometryJson = null;
@@ -25,6 +31,17 @@ public final class SkinPackLoader {
     private static final File skinPacksDir = new File("skin_packs");
     private static final Map<String, Map<String, String>> translations = new HashMap<>();
     public static List<String> packOrder = Collections.emptyList();
+
+    // Helper method for version-specific identifier creation
+    //? if >=1.21.11 {
+    private static Identifier createIdentifier(String namespace, String path) {
+        return Identifier.fromNamespaceAndPath(namespace, path);
+    }
+    //?} else {
+    /*private static ResourceLocation createIdentifier(String namespace, String path) {
+        return ResourceLocation.fromNamespaceAndPath(namespace, path);
+    }*/
+    //?}
 
     // --- Public API ---
 
@@ -48,6 +65,7 @@ public final class SkinPackLoader {
     public static void loadPacks() {
         loadedSkins.clear();
         translations.clear();
+        packTypesByPackId.clear();
 
         if (skinPacksDir.exists()) {
             File[] children = skinPacksDir.listFiles();
@@ -73,7 +91,11 @@ public final class SkinPackLoader {
         for (LoadedSkin s : loadedSkins.values()) registerSkinAssets(s);
     }
 
+    //? if >=1.21.11 {
     public static Identifier registerTextureFor(String key) {
+    //?} else {
+    /*public static ResourceLocation registerTextureFor(String key) {*/
+    //?}
         LoadedSkin skin = loadedSkins.get(key);
         if (skin == null) return null;
         if (skin.getIdentifier() != null) return skin.getIdentifier();
@@ -93,7 +115,7 @@ public final class SkinPackLoader {
             NativeImage img = NativeImage.read(new ByteArrayInputStream(textureData));
             DynamicTexture texture = new DynamicTexture(() -> "bedrock_skin_remote", img);
             String safeKey = StringUtils.sanitize(key);
-            Identifier id = Identifier.fromNamespaceAndPath("bedrockskins", "skins/remote/" + safeKey);
+            var id = createIdentifier("bedrockskins", "skins/remote/" + safeKey);
 
             Minecraft.getInstance().getTextureManager().register(id, texture);
 
@@ -116,7 +138,7 @@ public final class SkinPackLoader {
 
     private static void loadVanillaGeometry(ResourceManager manager) {
         try {
-            Identifier id = Identifier.fromNamespaceAndPath("bedrockskins", "skin_packs/vanilla/geometry.json");
+            var id = createIdentifier("bedrockskins", "skin_packs/vanilla/geometry.json");
             manager.getResource(id).ifPresent(res -> {
                 try (InputStream is = res.open(); InputStreamReader r = new InputStreamReader(is)) {
                     vanillaGeometryJson = JsonParser.parseReader(r).getAsJsonObject();
@@ -139,6 +161,20 @@ public final class SkinPackLoader {
 
             SkinPackManifest manifest = gson.fromJson(new FileReader(skinsFile), SkinPackManifest.class);
             loadExternalTranslations(packDir);
+
+            // Store packType by packId (serializeName), default to 'skin_pack' except for Favorites and Standard
+            if (manifest.getSerializeName() != null) {
+                String packId = "skinpack." + manifest.getSerializeName();
+                String packType = manifest.getPackType();
+                if (packType == null || packType.isEmpty()) {
+                    if (!"Favorites".equals(manifest.getSerializeName()) && !"Standard".equals(manifest.getSerializeName())) {
+                        packType = "skin_pack";
+                    }
+                }
+                if (packType != null) {
+                    packTypesByPackId.put(packId, packType);
+                }
+            }
 
             for (SkinEntry entry : manifest.getSkins()) {
                 JsonObject geometry = resolveGeometry(entry.getGeometry(), geometryJson);
@@ -169,7 +205,7 @@ public final class SkinPackLoader {
         System.out.println("SkinPackLoader: Scanning resources...");
         manager.listResources("skin_packs", idt -> idt.getPath().endsWith("skins.json")).forEach((id, resource) -> {
             try {
-                Identifier geoId = Identifier.fromNamespaceAndPath(id.getNamespace(), id.getPath().replace("skins.json", "geometry.json"));
+                var geoId = createIdentifier(id.getNamespace(), id.getPath().replace("skins.json", "geometry.json"));
                 JsonObject geoJson = manager.getResource(geoId).map(res -> {
                     try (InputStream is = res.open(); InputStreamReader r = new InputStreamReader(is)) {
                         return JsonParser.parseReader(r).getAsJsonObject();
@@ -180,6 +216,19 @@ public final class SkinPackLoader {
                 try (InputStream ris = resource.open(); InputStreamReader rr = new InputStreamReader(ris)) {
                     manifest = gson.fromJson(rr, SkinPackManifest.class);
                 }
+                // Store packType by packId (serializeName) for internal packs, default to 'skin_pack' except for Favorites and Standard
+                if (manifest.getSerializeName() != null) {
+                    String packId = "skinpack." + manifest.getSerializeName();
+                    String packType = manifest.getPackType();
+                    if (packType == null || packType.isEmpty()) {
+                        if (!"Favorites".equals(manifest.getSerializeName()) && !"Standard".equals(manifest.getSerializeName())) {
+                            packType = "skin_pack";
+                        }
+                    }
+                    if (packType != null) {
+                        packTypesByPackId.put(packId, packType);
+                    }
+                }
                 String packPath = id.getPath().substring(0, id.getPath().lastIndexOf('/'));
 
                 loadInternalTranslations(manager, id.getNamespace(), packPath);
@@ -187,12 +236,16 @@ public final class SkinPackLoader {
                 for (SkinEntry entry : manifest.getSkins()) {
                     JsonObject geometry = resolveGeometry(entry.getGeometry(), geoJson);
                     if (geometry == null) continue;
-                    Identifier textureId = Identifier.fromNamespaceAndPath(id.getNamespace(), (packPath + "/" + entry.getTexture()).toLowerCase(Locale.ROOT));
+                    var textureId = createIdentifier(id.getNamespace(), (packPath + "/" + entry.getTexture()).toLowerCase(Locale.ROOT));
 
                     if (manager.getResource(textureId).isPresent()) {
+                        //? if >=1.21.11 {
                         Identifier capeId = null;
+                        //?} else {
+                        /*ResourceLocation capeId = null;*/
+                        //?}
                         if (entry.getCape() != null) {
-                            Identifier candidate = Identifier.fromNamespaceAndPath(id.getNamespace(), (packPath + "/" + entry.getCape()).toLowerCase(Locale.ROOT));
+                            var candidate = createIdentifier(id.getNamespace(), (packPath + "/" + entry.getCape()).toLowerCase(Locale.ROOT));
                             if (manager.getResource(candidate).isPresent()) capeId = candidate;
                         }
 
@@ -268,7 +321,7 @@ public final class SkinPackLoader {
         // Texture
         NativeImage img = loadNativeImage(skin.getTexture());
         if (img != null) {
-            Identifier id = Identifier.fromNamespaceAndPath("bedrockskins", "skins/" + skin.getSafePackName() + "/" + skin.getSafeSkinName());
+            var id = createIdentifier("bedrockskins", "skins/" + skin.getSafePackName() + "/" + skin.getSafeSkinName());
             Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(() -> "bedrock_skin", img));
             skin.identifier = id;
             System.out.println("Registered texture: " + id);
@@ -278,7 +331,7 @@ public final class SkinPackLoader {
         if (skin.capeIdentifier == null && skin.getCape() != null) {
             NativeImage capeImg = loadNativeImage(skin.getCape());
             if (capeImg != null) {
-                Identifier id = Identifier.fromNamespaceAndPath("bedrockskins", "capes/" + skin.getSafePackName() + "/" + skin.getSafeSkinName());
+                var id = createIdentifier("bedrockskins", "capes/" + skin.getSafePackName() + "/" + skin.getSafeSkinName());
                 Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(() -> "bedrock_cape", capeImg));
                 skin.capeIdentifier = id;
                 System.out.println("Registered texture: " + id);
@@ -325,7 +378,7 @@ public final class SkinPackLoader {
         try { clientLang = Minecraft.getInstance().getLanguageManager().getSelected().toLowerCase(Locale.ROOT); } catch (Exception ignored) {}
         List<String> langs = Arrays.asList(clientLang, "en_us");
         for (String lang : new LinkedHashSet<>(langs)) {
-            Identifier id = Identifier.fromNamespaceAndPath(namespace, packPath + "/texts/" + lang + ".lang");
+            var id = createIdentifier(namespace, packPath + "/texts/" + lang + ".lang");
             manager.getResource(id).ifPresent(res -> {
                 try (InputStream is = res.open()) {
                     parseTranslationStream(is, translations.computeIfAbsent(lang, k -> new HashMap<>()));
@@ -356,7 +409,7 @@ public final class SkinPackLoader {
 
     private static void loadPackOrder(ResourceManager manager) {
         try {
-            manager.getResource(Identifier.fromNamespaceAndPath("bedrockskins", "order_overrides.json")).ifPresent(res -> {
+            manager.getResource(createIdentifier("bedrockskins", "order_overrides.json")).ifPresent(res -> {
                 try (InputStream is = res.open()) {
                     String[] arr = gson.fromJson(new InputStreamReader(is), String[].class);
                     packOrder = Arrays.asList(arr);

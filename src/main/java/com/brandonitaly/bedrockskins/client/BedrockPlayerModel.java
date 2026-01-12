@@ -11,7 +11,11 @@ import net.minecraft.client.model.geom.builders.CubeListBuilder;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.model.geom.builders.MeshDefinition;
 import net.minecraft.client.model.geom.builders.PartDefinition;
+//? if >=1.21.11 {
 import net.minecraft.client.model.player.PlayerModel;
+//?} else {
+/*import net.minecraft.client.model.PlayerModel;*/
+//?}
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import java.util.*;
 

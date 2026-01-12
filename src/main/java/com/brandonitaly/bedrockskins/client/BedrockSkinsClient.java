@@ -6,6 +6,7 @@ import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.brandonitaly.bedrockskins.client.gui.SkinSelectionScreen;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -15,7 +16,11 @@ import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
@@ -44,12 +49,32 @@ public class BedrockSkinsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         //? if >1.21.8 {
+        //? if >=1.21.11 {
         keybindCategory = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("bedrockskins", "controls"));
+        //?} else {
+        /*keybindCategory = KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("bedrockskins", "controls"));*/
+        //?}
         //?}
         registerKeyBinding();
         registerCustomizationKeybinds();
         registerLifecycleEvents();
         registerNetworking();
+    }
+
+    public static net.minecraft.client.gui.screens.Screen getAppropriateSkinScreen(net.minecraft.client.gui.screens.Screen parent) {
+        if (FabricLoader.getInstance().isModLoaded("legacy")) {
+            try {
+                // Use reflection to avoid loading Legacy4J classes when the mod isn't present
+                Class<?> screenClass = Class.forName("com.brandonitaly.bedrockskins.client.gui.legacy.Legacy4JChangeSkinScreen");
+                var constructor = screenClass.getConstructor(net.minecraft.client.gui.screens.Screen.class);
+                return (net.minecraft.client.gui.screens.Screen) constructor.newInstance(parent);
+            } catch (Exception e) {
+                // Fallback to standard screen if Legacy4J integration fails
+                return new SkinSelectionScreen(parent);
+            }
+        } else {
+            return new SkinSelectionScreen(parent);
+        }
     }
 
     private void registerKeyBinding() {
@@ -64,7 +89,7 @@ public class BedrockSkinsClient implements ClientModInitializer {
 
             ClientTickEvents.END_CLIENT_TICK.register(client -> {
                 while (openKey.consumeClick()) {
-                    client.setScreen(new SkinSelectionScreen(client.screen));
+                    client.setScreen(getAppropriateSkinScreen(client.screen));
                 }
             });
             System.out.println("BedrockSkinsClient: Registered keybinding (K)");
@@ -174,9 +199,15 @@ public class BedrockSkinsClient implements ClientModInitializer {
 
     private final class Reloader implements IdentifiableResourceReloadListener, ResourceManagerReloadListener {
         @Override
+        //? if >=1.21.11 {
         public Identifier getFabricId() {
             return Identifier.fromNamespaceAndPath("bedrockskins", "reloader");
         }
+        //?} else {
+        /*public ResourceLocation getFabricId() {
+            return ResourceLocation.fromNamespaceAndPath("bedrockskins", "reloader");
+        }*/
+        //?}
 
         @Override
         public void onResourceManagerReload(ResourceManager manager) {

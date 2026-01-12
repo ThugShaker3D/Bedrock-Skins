@@ -10,9 +10,17 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+//? if <1.21.11 {
+/*import net.minecraft.client.renderer.RenderType;*/
+//?} else {
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+//?}
 import net.minecraft.client.renderer.texture.OverlayTexture;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.world.entity.Avatar;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -25,7 +33,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinPlayerEntityRenderer {
 
     @Unique
+    //? if >=1.21.11 {
     private void bedrockSkins$renderArm(boolean isRightArm, PoseStack matrices, int light, Identifier skinTexture, boolean sleeveVisible, Object rendererOrQueue, CallbackInfo ci) {
+    //?} else {
+    /*private void bedrockSkins$renderArm(boolean isRightArm, PoseStack matrices, int light, ResourceLocation skinTexture, boolean sleeveVisible, Object rendererOrQueue, CallbackInfo ci) {*/
+    //?}
         var player = Minecraft.getInstance().player;
         if (player == null) return;
         var uuid = player.getUUID();
@@ -44,7 +56,7 @@ public abstract class MixinPlayerEntityRenderer {
             if (part != null) {
                 String skinKey = SkinManager.getSkin(uuid.toString());
                 var bedrockSkin = (skinKey != null) ? SkinPackLoader.loadedSkins.get(skinKey) : null;
-                Identifier texture = (bedrockSkin != null && bedrockSkin.identifier != null) ? bedrockSkin.identifier : skinTexture;
+                var texture = (bedrockSkin != null && bedrockSkin.identifier != null) ? bedrockSkin.identifier : skinTexture;
 
                 final var finalPart = part;
                 final var finalSleeve = sleeve;
@@ -76,7 +88,7 @@ public abstract class MixinPlayerEntityRenderer {
                 var queue = (SubmitNodeCollector) rendererOrQueue;
                 
                 //? if <1.21.11 {
-                /*var layer = RenderLayer.getEntityTranslucent(texture);*/
+                /*var layer = RenderType.entityTranslucent(texture);*/
                 //?} else {
                 var layer = RenderTypes.entityTranslucent(texture);
                 //?}
@@ -127,19 +139,34 @@ public abstract class MixinPlayerEntityRenderer {
         }
     }
 
+    //? if >=1.21.11 {
     @Inject(method = "renderRightHand", at = @At("HEAD"), cancellable = true)
     private void renderRightArm(PoseStack matrices, SubmitNodeCollector queue, int light, Identifier tex, boolean sleeve, CallbackInfo ci) {
+    //?} else {
+    /*@Inject(method = "renderRightHand", at = @At("HEAD"), cancellable = true)
+    private void renderRightArm(PoseStack matrices, SubmitNodeCollector queue, int light, ResourceLocation tex, boolean sleeve, CallbackInfo ci) {*/
+    //?}
         bedrockSkins$renderArm(true, matrices, light, tex, sleeve, queue, ci);
     }
 
+    //? if >=1.21.11 {
     @Inject(method = "renderLeftHand", at = @At("HEAD"), cancellable = true)
     private void renderLeftArm(PoseStack matrices, SubmitNodeCollector queue, int light, Identifier tex, boolean sleeve, CallbackInfo ci) {
+    //?} else {
+    /*@Inject(method = "renderLeftHand", at = @At("HEAD"), cancellable = true)
+    private void renderLeftArm(PoseStack matrices, SubmitNodeCollector queue, int light, ResourceLocation tex, boolean sleeve, CallbackInfo ci) {*/
+    //?}
         bedrockSkins$renderArm(false, matrices, light, tex, sleeve, queue, ci);
     }
     //?}
 
+    //? if >=1.21.11 {
     @Inject(method = "getTextureLocation", at = @At("HEAD"), cancellable = true)
     private void getTexture(AvatarRenderState state, CallbackInfoReturnable<Identifier> ci) {
+    //?} else {
+    /*@Inject(method = "getTextureLocation", at = @At("HEAD"), cancellable = true)
+    private void getTexture(AvatarRenderState state, CallbackInfoReturnable<ResourceLocation> ci) {*/
+    //?}
         if (state instanceof BedrockSkinState skinState) {
             java.util.UUID uuid = skinState.getUniqueId();
             if (uuid != null) {

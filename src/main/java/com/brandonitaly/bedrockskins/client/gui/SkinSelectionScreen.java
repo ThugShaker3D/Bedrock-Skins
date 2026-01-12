@@ -19,8 +19,13 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;
+import net.minecraft.Util;*/
+//?}
 import net.minecraft.world.entity.player.PlayerModelPart;
 
 import java.io.File;
@@ -28,7 +33,11 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 public class SkinSelectionScreen extends Screen {
+    //? if >=1.21.11 {
     public static final Identifier TAB_HEADER_BACKGROUND = Identifier.withDefaultNamespace("textures/gui/tab_header_background.png");
+    //?} else {
+    /*public static final ResourceLocation TAB_HEADER_BACKGROUND = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/tab_header_background.png");*/
+    //?}
 
     // --- Widgets & State ---
     private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
@@ -397,7 +406,11 @@ public class SkinSelectionScreen extends Screen {
     private void openSkinPacksFolder() {
         File dir = new File(minecraft.gameDirectory, "skin_packs");
         if (!dir.exists()) dir.mkdirs();
+        //? if >=1.21.11 {
         Util.getPlatform().openFile(dir);
+        //?} else {
+        /*Util.getPlatform().openFile(dir);*/
+        //?}
     }
 
     private void safeRegisterTexture(String key) { GuiUtils.safeRegisterTexture(key); }

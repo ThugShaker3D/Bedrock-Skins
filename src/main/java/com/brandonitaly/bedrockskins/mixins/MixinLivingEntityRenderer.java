@@ -4,7 +4,11 @@ import com.brandonitaly.bedrockskins.client.BedrockModelManager;
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.EntityModel;
+//? if >=1.21.11 {
 import net.minecraft.client.model.player.PlayerModel;
+//?} else {
+/*import net.minecraft.client.model.PlayerModel;*/
+//?}
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
@@ -38,9 +42,15 @@ public abstract class MixinLivingEntityRenderer {
                     originalModel = this.model;
                     this.model = (EntityModel) bedrockModel;
                     
-                    if (originalModel instanceof PlayerModel playerModel) {
+                    //? if >=1.21.11 {
+                    if (originalModel instanceof net.minecraft.client.model.player.PlayerModel playerModel) {
                         bedrockModel.copyFromVanilla(playerModel);
                     }
+                    //?} else {
+                    /*if (originalModel instanceof net.minecraft.client.model.PlayerModel playerModel) {
+                        bedrockModel.copyFromVanilla(playerModel);
+                    }*/
+                    //?}
                 }
             }
         }

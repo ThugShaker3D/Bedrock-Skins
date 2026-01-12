@@ -12,6 +12,9 @@ public class SkinPackManifest {
     @SerializedName("localization_name")
     private String localizationName;
 
+    @SerializedName("pack_type")
+    private String packType;
+
     public List<SkinEntry> getSkins() { return skins; }
     public void setSkins(List<SkinEntry> skins) { this.skins = skins; }
 
@@ -20,4 +23,7 @@ public class SkinPackManifest {
 
     public String getLocalizationName() { return localizationName; }
     public void setLocalizationName(String localizationName) { this.localizationName = localizationName; }
+
+    public String getPackType() { return packType; }
+    public void setPackType(String packType) { this.packType = packType; }
 }

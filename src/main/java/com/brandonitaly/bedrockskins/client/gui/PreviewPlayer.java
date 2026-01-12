@@ -7,23 +7,37 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.RemotePlayer;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.world.entity.player.PlayerModelPart;
 import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.core.ClientAsset.ResourceTexture;
 
 public class PreviewPlayer extends RemotePlayer {
 
+    //? if >=1.21.11 {
     private Identifier forcedCape = null;
+    //?} else {
+    /*private ResourceLocation forcedCape = null;*/
+    //?}
 
     public PreviewPlayer(ClientLevel world, GameProfile profile) {
         super(world, profile);
     }
 
     // Sets a cape to be forced on the player preview
+    //? if >=1.21.11 {
     public void setForcedCape(Identifier cape) {
         this.forcedCape = cape;
     }
+    //?} else {
+    /*public void setForcedCape(ResourceLocation cape) {
+        this.forcedCape = cape;
+    }*/
+    //?}
 
     @Override
     public PlayerSkin getSkin() {
