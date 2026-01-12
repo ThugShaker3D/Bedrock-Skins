@@ -41,7 +41,13 @@ import wily.legacy.util.LegacySprites;
 import wily.legacy.util.client.LegacyRenderUtil;
 import net.minecraft.client.renderer.RenderPipelines;
 
-import java.util.*;
+import java.io.File;
+import java.nio.file.Files;
+
+import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * Legacy4J-styled carousel skin selection screen for Bedrock Skins.
@@ -171,8 +177,7 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
                 SkinManager.setSkin(minecraft.player.getUUID().toString(), skin.getPackDisplayName(), skin.getSkinDisplayName());
 
                 // Load texture data
-                byte[] textureData = new byte[0];
-                // TODO: Load actual texture data if needed for networking
+                byte[] textureData = loadTextureData(skin);
 
                 ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(
                     skinKey,
@@ -847,5 +852,24 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
                 LegacyRegistries.FOCUS.get(), 1.0f
             )
         );
+    }
+
+    private byte[] loadTextureData(LoadedSkin skin) {
+        try {
+            AssetSource src = skin.getTexture();
+            if (src instanceof AssetSource.Resource) {
+                var resOpt = minecraft.getResourceManager().getResource(((AssetSource.Resource) src).getId());
+                if (resOpt.isPresent()) {
+                    return resOpt.get().open().readAllBytes();
+                }
+                return new byte[0];
+            } else if (src instanceof AssetSource.File) {
+                File f = new File(((AssetSource.File) src).getPath());
+                return Files.readAllBytes(f.toPath());
+            } else {
+                return new byte[0];
+            }
+        } catch (Exception ignored) {}
+        return new byte[0];
     }
 }
