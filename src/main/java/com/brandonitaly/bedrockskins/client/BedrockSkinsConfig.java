@@ -2,7 +2,9 @@ package com.brandonitaly.bedrockskins.client;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+//? if fabric {
 import net.fabricmc.loader.api.FabricLoader;
+//? }
 
 import java.io.IOException;
 import java.io.Reader;
@@ -12,7 +14,12 @@ import java.nio.file.Path;
 
 public class BedrockSkinsConfig {
     private static final Gson GSON = new Gson();
+    //? if fabric {
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("bedrockskins.json");
+    //? }
+    //? if neoforge {
+    // private static final Path CONFIG_PATH = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("bedrockskins.json");
+    //? }
 
     private static boolean scanResourcePacksForSkins = true;
 
