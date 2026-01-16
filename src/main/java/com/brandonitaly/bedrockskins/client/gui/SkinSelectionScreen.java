@@ -32,7 +32,6 @@ import net.minecraft.world.entity.player.PlayerModelPart;
 import com.brandonitaly.bedrockskins.client.BedrockSkinsConfig;
 
 import java.io.File;
-import java.lang.reflect.Method;
 import java.util.*;
 
 public class SkinSelectionScreen extends Screen {
@@ -208,7 +207,7 @@ public class SkinSelectionScreen extends Screen {
     private void initWidgets() {
         if (minecraft == null) return;
         int PANEL_HEADER_HEIGHT = 24;
-        int PANEL_PADDING = 4; // restore original padding to match previous layout
+        int PANEL_PADDING = 4;
 
         // -- Pack List --
         int plY = rPacks.y + PANEL_HEADER_HEIGHT + PANEL_PADDING;
@@ -219,12 +218,14 @@ public class SkinSelectionScreen extends Screen {
                     this::selectPack,
                     id -> Objects.equals(selectedPackId, id),
                     font);
-            ReflectionHelper.setPos(packList, rPacks.x + PANEL_PADDING, plY);
+            packList.setX(rPacks.x + PANEL_PADDING);
+            packList.setY(plY);
             addRenderableWidget(packList);
         } else {
-            ReflectionHelper.setPos(packList, rPacks.x + PANEL_PADDING, plY);
-            ReflectionHelper.setSize(packList, Math.max(10, rPacks.w - (PANEL_PADDING * 2)), Math.max(10, plH));
-            ReflectionHelper.setListBounds(packList, rPacks.x + PANEL_PADDING, plY, Math.max(10, rPacks.w - (PANEL_PADDING * 2)), Math.max(10, plH));
+            packList.setX(rPacks.x + PANEL_PADDING);
+            packList.setY(plY);
+            packList.setWidth(Math.max(10, rPacks.w - (PANEL_PADDING * 2)));
+            packList.setHeight(Math.max(10, plH));
         }
 
         // -- Preview Panel --
@@ -247,12 +248,14 @@ public class SkinSelectionScreen extends Screen {
                     this::safeRegisterTexture,
                     SkinManager::setPreviewSkin,
                     this::safeResetPreview);
-            ReflectionHelper.setPos(skinGrid, rSkins.x + PANEL_PADDING, sgY);
+            skinGrid.setX(rSkins.x + PANEL_PADDING);
+            skinGrid.setY(sgY);
             addRenderableWidget(skinGrid);
         } else {
-            ReflectionHelper.setPos(skinGrid, rSkins.x + PANEL_PADDING, sgY);
-            ReflectionHelper.setSize(skinGrid, Math.max(10, rSkins.w - (PANEL_PADDING * 2)), Math.max(10, sgH));
-            ReflectionHelper.setListBounds(skinGrid, rSkins.x + PANEL_PADDING, sgY, Math.max(10, rSkins.w - (PANEL_PADDING * 2)), Math.max(10, sgH));
+            skinGrid.setX(rSkins.x + PANEL_PADDING);
+            skinGrid.setY(sgY);
+            skinGrid.setWidth(Math.max(10, rSkins.w - (PANEL_PADDING * 2)));
+            skinGrid.setHeight(Math.max(10, sgH));
         }
 
         // Refresh pack list entries and selection
@@ -513,102 +516,7 @@ public class SkinSelectionScreen extends Screen {
         int centerX() { return x + (w / 2); }
     }
     
-    private static class ReflectionHelper {
-        private static Method setPosition;
 
-        static void setPos(Object widget, int x, int y) {
-            if (widget instanceof AbstractWidget aw) {
-                aw.setX(x);
-                aw.setY(y);
-                return;
-            }
-            try {
-                Class<?> clz = widget.getClass();
-                if (setPosition != null) { setPosition.invoke(widget, x, y); return; }
-                
-                try {
-                    Method mx = clz.getMethod("setX", int.class);
-                    mx.invoke(widget, x);
-                    try { clz.getMethod("setY", int.class).invoke(widget, y); } catch(Exception ignored){}
-                    return;
-                } catch (Exception ignored) {}
-
-                try {
-                    Method m = clz.getMethod("setLeftPos", int.class);
-                    m.invoke(widget, x);
-                    try { clz.getMethod("setTopPos", int.class).invoke(widget, y); } catch(Exception ignored){}
-                    return;
-                } catch (Exception ignored) {}
-                
-                try {
-                    Method m = clz.getMethod("setPosition", int.class, int.class);
-                    setPosition = m;
-                    m.invoke(widget, x, y);
-                } catch (Exception ignored) {}
-
-            } catch (Exception ignored) {
-                try {
-                    var fx = widget.getClass().getField("x");
-                    fx.setAccessible(true); fx.setInt(widget, x);
-                    var fy = widget.getClass().getField("y");
-                    fy.setAccessible(true); fy.setInt(widget, y);
-                } catch (Exception e) { }
-            }
-        }
-
-        static void setSize(Object widget, int w, int h) {
-            try {
-                Class<?> clz = widget.getClass();
-                try {
-                    Method mw = clz.getMethod("setWidth", int.class);
-                    mw.invoke(widget, w);
-                } catch (Exception ignored) {
-                    try {
-                        var fw = clz.getField("width");
-                        fw.setAccessible(true);
-                        fw.setInt(widget, w);
-                    } catch (Exception ignored2) {}
-                }
-
-                try {
-                    Method mh = clz.getMethod("setHeight", int.class);
-                    mh.invoke(widget, h);
-                } catch (Exception ignored) {
-                    try {
-                        var fh = clz.getField("height");
-                        fh.setAccessible(true);
-                        fh.setInt(widget, h);
-                    } catch (Exception ignored2) {}
-                }
-            } catch (Exception ignored) {}
-        }
-
-        static void setListBounds(Object widget, int x, int y, int w, int h) {
-            try {
-                Class<?> clz = widget.getClass();
-                // set x/y
-                try { clz.getMethod("setX", int.class).invoke(widget, x); } catch (Exception ignored) {}
-                try { clz.getMethod("setY", int.class).invoke(widget, y); } catch (Exception ignored) {}
-                try { var fx = clz.getField("x"); fx.setAccessible(true); fx.setInt(widget, x); } catch (Exception ignored) {}
-                try { var fy = clz.getField("y"); fy.setAccessible(true); fy.setInt(widget, y); } catch (Exception ignored) {}
-
-                // set width/height
-                setSize(widget, w, h);
-
-                // set top/bottom/left/right if present
-                try { var top = clz.getField("top"); top.setAccessible(true); top.setInt(widget, y); } catch (Exception ignored) {}
-                try { var bottom = clz.getField("bottom"); bottom.setAccessible(true); bottom.setInt(widget, y + h); } catch (Exception ignored) {}
-                try { var left = clz.getField("left"); left.setAccessible(true); left.setInt(widget, x); } catch (Exception ignored) {}
-                try { var right = clz.getField("right"); right.setAccessible(true); right.setInt(widget, x + w); } catch (Exception ignored) {}
-
-                // call methods if available
-                try { clz.getMethod("setTop", int.class).invoke(widget, y); } catch (Exception ignored) {}
-                try { clz.getMethod("setBottom", int.class).invoke(widget, y + h); } catch (Exception ignored) {}
-                try { clz.getMethod("setLeftPos", int.class).invoke(widget, x); } catch (Exception ignored) {}
-                try { clz.getMethod("setRightPos", int.class).invoke(widget, x + w); } catch (Exception ignored) {}
-            } catch (Exception ignored) {}
-        }
-    }
 
     @Override
     public void onClose() {
