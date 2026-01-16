@@ -7,26 +7,18 @@ import com.google.gson.Gson;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 public final class BedrockModelManager {
     private BedrockModelManager() {}
 
-    private static final Map<UUID, BedrockPlayerModel> bedrockModels = new HashMap<>();
-    private static final Map<UUID, SkinId> activeSkinKeys = new HashMap<>();
+    private static final Map<SkinId, BedrockPlayerModel> bedrockModels = new HashMap<>();
     private static final Gson gson = new Gson();
 
-    public static BedrockPlayerModel getModel(UUID uuid) {
-        SkinId skinKey = SkinManager.getSkin(uuid.toString());
+    public static BedrockPlayerModel getModel(SkinId skinKey) {
         if (skinKey == null) return null;
 
-        if (!java.util.Objects.equals(skinKey, activeSkinKeys.get(uuid))) {
-            bedrockModels.remove(uuid);
-            activeSkinKeys.put(uuid, skinKey);
-        }
-
-        if (bedrockModels.containsKey(uuid)) {
-            return bedrockModels.get(uuid);
+        if (bedrockModels.containsKey(skinKey)) {
+            return bedrockModels.get(skinKey);
         }
 
         var skin = SkinPackLoader.getLoadedSkin(skinKey);
@@ -44,7 +36,7 @@ public final class BedrockModelManager {
             if (geometryList != null && !geometryList.isEmpty()) {
                 var geometry = geometryList.get(0);
                 var model = BedrockPlayerModel.create(geometry, false);
-                bedrockModels.put(uuid, model);
+                bedrockModels.put(skinKey, model);
                 return model;
             }
         } catch (Exception e) {
@@ -56,6 +48,5 @@ public final class BedrockModelManager {
 
     public static void clearAllModels() {
         bedrockModels.clear();
-        activeSkinKeys.clear();
     }
 }

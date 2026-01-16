@@ -2,6 +2,8 @@ package com.brandonitaly.bedrockskins.mixins;
 
 import com.brandonitaly.bedrockskins.client.BedrockModelManager;
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
+import com.brandonitaly.bedrockskins.client.SkinManager;
+import com.brandonitaly.bedrockskins.client.BedrockPlayerModel;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.EntityModel;
 //? if >=1.21.11 {
@@ -37,7 +39,8 @@ public abstract class MixinLivingEntityRenderer {
         if (state instanceof AvatarRenderState && state instanceof BedrockSkinState skinState) {
             java.util.UUID uuid = skinState.getUniqueId();
             if (uuid != null) {
-                var bedrockModel = BedrockModelManager.getModel(uuid);
+                var skinId = SkinManager.getSkin(uuid.toString());
+                BedrockPlayerModel bedrockModel = skinId == null ? null : BedrockModelManager.getModel(skinId);
                 if (bedrockModel != null) {
                     originalModel = this.model;
                     this.model = (EntityModel) bedrockModel;

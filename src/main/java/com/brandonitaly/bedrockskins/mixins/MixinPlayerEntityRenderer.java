@@ -44,7 +44,8 @@ public abstract class MixinPlayerEntityRenderer {
         var player = Minecraft.getInstance().player;
         if (player == null) return;
         var uuid = player.getUUID();
-        var bedrockModel = BedrockModelManager.getModel(uuid);
+        var skinId = SkinManager.getSkin(uuid.toString());
+        var bedrockModel = skinId == null ? null : BedrockModelManager.getModel(skinId);
 
         if (bedrockModel != null) {
             String side = isRightArm ? "right" : "left";
@@ -57,8 +58,8 @@ public abstract class MixinPlayerEntityRenderer {
             if (sleeve == null) sleeve = parts.get(side + "Sleeve");
 
             if (part != null) {
-                SkinId skinId = SkinManager.getSkin(uuid.toString());
                 var bedrockSkin = (skinId != null) ? SkinPackLoader.getLoadedSkin(skinId) : null;
+
                 var texture = (bedrockSkin != null && bedrockSkin.identifier != null) ? bedrockSkin.identifier : skinTexture;
 
                 final var finalPart = part;

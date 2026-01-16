@@ -31,7 +31,8 @@ public abstract class MixinArmorFeatureRenderer {
     @Unique
     private void bedrockSkins$configureVisibility(UUID uuid, boolean isPlayerRenderState, boolean stateCapeVisible) {
         if (uuid == null) return;
-        var model = BedrockModelManager.getModel(uuid);
+        var skinId = SkinManager.getSkin(uuid.toString());
+        var model = skinId == null ? null : BedrockModelManager.getModel(skinId);
         if (!(model instanceof BedrockPlayerModel bedrockModel)) return;
 
         // 1. Default to visible
@@ -144,9 +145,9 @@ public abstract class MixinArmorFeatureRenderer {
 
     @Inject(method = "renderArmorPiece", at = @At("HEAD"))
     private void beforeRenderArmor(PoseStack matrices, SubmitNodeCollector queue, ItemStack stack, EquipmentSlot slot, int light, HumanoidRenderState state, CallbackInfo ci) {
-        // New version: derive model from state UUID
         UUID uuid = (state instanceof BedrockSkinState skinState) ? skinState.getUniqueId() : null;
-        var model = (uuid != null) ? BedrockModelManager.getModel(uuid) : null;
+        var skinId = uuid == null ? null : SkinManager.getSkin(uuid.toString());
+        var model = (skinId != null) ? BedrockModelManager.getModel(skinId) : null;
         bedrockSkins$applyArmorOffset(matrices, model, stack, slot);
     }
 

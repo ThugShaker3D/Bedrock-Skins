@@ -2,6 +2,8 @@ package com.brandonitaly.bedrockskins.mixins;
 
 import com.brandonitaly.bedrockskins.client.BedrockModelManager;
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
+import com.brandonitaly.bedrockskins.client.SkinManager;
+import com.brandonitaly.bedrockskins.client.BedrockPlayerModel;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -28,7 +30,8 @@ public abstract class MixinElytraFeatureRenderer {
         if (state instanceof BedrockSkinState) {
             UUID uuid = ((BedrockSkinState) state).getUniqueId();
             if (uuid != null) {
-                var model = BedrockModelManager.getModel(uuid);
+                var skinId = SkinManager.getSkin(uuid.toString());
+                BedrockPlayerModel model = skinId == null ? null : BedrockModelManager.getModel(skinId);
                 if (model != null && model.capeYOffset != 0f) {
                     matrices.pushPose();
                     matrices.translate(0.0, model.capeYOffset * 0.0625f, 0.0);
