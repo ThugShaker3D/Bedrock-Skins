@@ -2,6 +2,7 @@ package com.brandonitaly.bedrockskins.client.gui.legacy;
 
 import com.brandonitaly.bedrockskins.pack.LoadedSkin;
 import com.brandonitaly.bedrockskins.pack.SkinPackLoader;
+import com.brandonitaly.bedrockskins.pack.SkinId;
 import java.util.*;
 
 /**
@@ -51,9 +52,11 @@ public class SkinPackAdapter {
         return skins.indexOf(skin);
     }
     
-    public int indexOf(String skinKey) {
+    public int indexOf(SkinId skinId) {
+        if (skinId == null) return -1;
         for (int i = 0; i < skins.size(); i++) {
-            if (skins.get(i).getKey().equals(skinKey)) {
+            var id = skins.get(i).getSkinId();
+            if (java.util.Objects.equals(id, skinId)) {
                 return i;
             }
         }

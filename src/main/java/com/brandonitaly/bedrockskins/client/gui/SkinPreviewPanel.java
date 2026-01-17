@@ -58,7 +58,7 @@ public class SkinPreviewPanel {
     private Button selectButton;
     private Button resetButton;
     private LoadedSkin selectedSkin;
-    private String currentSkinKey;
+    private SkinId currentSkinId;
     private PreviewPlayer dummyPlayer;
     private UUID dummyUuid = UUID.randomUUID();
     private float rotationX = 0;
@@ -193,7 +193,7 @@ public class SkinPreviewPanel {
         
         if (currentKey != null) {
             this.dummyUuid = UUID.randomUUID();
-            this.currentSkinKey = currentKey == null ? null : currentKey.toString();
+            this.currentSkinId = currentKey;
             
             // Try to load the skin object for the current key
             LoadedSkin currentSkin = SkinPackLoader.getLoadedSkin(currentKey);
@@ -209,7 +209,7 @@ public class SkinPreviewPanel {
             } else {
                 this.dummyUuid = UUID.randomUUID();
             }
-            this.currentSkinKey = null;
+            this.currentSkinId = null;
             updatePreviewModel(dummyUuid, null);
             updateFavoriteButton();
             updateActionButtons();
@@ -218,7 +218,7 @@ public class SkinPreviewPanel {
 
     public void setSelectedSkin(LoadedSkin skin) {
         this.selectedSkin = skin;
-        this.currentSkinKey = skin != null ? skin.getKey() : null;
+        this.currentSkinId = skin != null ? skin.getSkinId() : null;
         updateFavoriteButton();
         updateActionButtons();
         // Ensure reset is enabled after selecting a skin and update preview availability
@@ -275,12 +275,12 @@ public class SkinPreviewPanel {
                 if (data.length > 0) {
                     //? if fabric {
                     ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(
-                        key, selectedSkin.getGeometryData().toString(), data
+                        id, selectedSkin.getGeometryData().toString(), data
                     ));
                     //? } else if neoforge {
                     /*net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(
                         new BedrockSkinsNetworking.SetSkinPayload(
-                            key, selectedSkin.getGeometryData().toString(), data
+                            id, selectedSkin.getGeometryData().toString(), data
                         )
                     );*/
                     //? }
@@ -297,14 +297,14 @@ public class SkinPreviewPanel {
 
     private void resetSkin() {
         selectedSkin = null;
-        currentSkinKey = null;
+        currentSkinId = null;
         if (minecraft.player != null) {
             SkinManager.resetSkin(minecraft.player.getUUID().toString());
             //? if fabric {
-            ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0]));
+            ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(null, "", new byte[0]));
             //? } else if neoforge {
             /*net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(
-                new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0])
+                new BedrockSkinsNetworking.SetSkinPayload(null, "", new byte[0])
             );*/
             //? }
             safeResetPreview(this.dummyUuid.toString());
@@ -337,7 +337,7 @@ public class SkinPreviewPanel {
                 // Enable reset if player has a non-default selected key OR a skin is selected in UI
                 resetActive = SkinManager.getLocalSelectedKey() != null || selectedSkin != null;
             } else {
-                resetActive = selectedSkin != null || currentSkinKey != null;
+                resetActive = selectedSkin != null || currentSkinId != null;
             }
             resetButton.active = resetActive;
         }
@@ -349,7 +349,7 @@ public class SkinPreviewPanel {
         updateActionButtons();
         if (favoriteButton == null) return;
         
-        boolean hasSkin = currentSkinKey != null;
+        boolean hasSkin = currentSkinId != null;
         boolean isFav = selectedSkin != null && FavoritesManager.isFavorite(selectedSkin);
         
         favoriteButton.setSelected(isFav);
@@ -366,7 +366,7 @@ public class SkinPreviewPanel {
         if (minecraft.player != null) {
             resetActive = SkinManager.getLocalSelectedKey() != null || selectedSkin != null;
         } else {
-            resetActive = selectedSkin != null || currentSkinKey != null;
+            resetActive = selectedSkin != null || currentSkinId != null;
         }
         if (resetButton != null) resetButton.active = resetActive;
 

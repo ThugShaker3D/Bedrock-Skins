@@ -1,6 +1,8 @@
 package com.brandonitaly.bedrockskins;
 
 import java.util.Arrays;
+import java.util.Objects;
+import com.brandonitaly.bedrockskins.pack.SkinId;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -23,20 +25,20 @@ public final class BedrockSkinsNetworking {
         //?}
         public static final StreamCodec<RegistryFriendlyByteBuf, SkinUpdatePayload> CODEC = StreamCodec.composite(
             UUIDUtil.STREAM_CODEC, SkinUpdatePayload::getUuid,
-            ByteBufCodecs.stringUtf8(32767), SkinUpdatePayload::getSkinKey,
+            ByteBufCodecs.stringUtf8(32767), payload -> payload.getSkinId() == null ? "RESET" : payload.getSkinId().toString(),
             ByteBufCodecs.stringUtf8(262144), SkinUpdatePayload::getGeometry,
             ByteBufCodecs.byteArray(1048576), SkinUpdatePayload::getTextureData,
-            SkinUpdatePayload::new
+            (uuid, skinKeyStr, geometry, textureData) -> new SkinUpdatePayload(uuid, SkinId.parse(skinKeyStr), geometry, textureData)
         );
 
         private final java.util.UUID uuid;
-        private final String skinKey;
+        private final SkinId skinId;
         private final String geometry;
         private final byte[] textureData;
 
-        public SkinUpdatePayload(java.util.UUID uuid, String skinKey, String geometry, byte[] textureData) {
+        public SkinUpdatePayload(java.util.UUID uuid, SkinId skinId, String geometry, byte[] textureData) {
             this.uuid = uuid;
-            this.skinKey = skinKey;
+            this.skinId = skinId;
             this.geometry = geometry;
             this.textureData = textureData == null ? new byte[0] : textureData;
         }
@@ -47,7 +49,7 @@ public final class BedrockSkinsNetworking {
         }
 
         public java.util.UUID getUuid() { return uuid; }
-        public String getSkinKey() { return skinKey; }
+        public SkinId getSkinId() { return skinId; }
         public String getGeometry() { return geometry; }
         public byte[] getTextureData() { return textureData; }
 
@@ -57,7 +59,7 @@ public final class BedrockSkinsNetworking {
             if (other == null || getClass() != other.getClass()) return false;
             SkinUpdatePayload that = (SkinUpdatePayload) other;
             if (!uuid.equals(that.uuid)) return false;
-            if (!skinKey.equals(that.skinKey)) return false;
+            if (!Objects.equals(skinId, that.skinId)) return false;
             if (!geometry.equals(that.geometry)) return false;
             return Arrays.equals(textureData, that.textureData);
         }
@@ -65,7 +67,7 @@ public final class BedrockSkinsNetworking {
         @Override
         public int hashCode() {
             int result = uuid.hashCode();
-            result = 31 * result + skinKey.hashCode();
+            result = 31 * result + (skinId == null ? 0 : skinId.hashCode());
             result = 31 * result + geometry.hashCode();
             result = 31 * result + Arrays.hashCode(textureData);
             return result;
@@ -79,18 +81,18 @@ public final class BedrockSkinsNetworking {
         /*public static final CustomPacketPayload.Type<SetSkinPayload> ID = new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("bedrockskins", "set_skin"));*/
         //?}
         public static final StreamCodec<RegistryFriendlyByteBuf, SetSkinPayload> CODEC = StreamCodec.composite(
-            ByteBufCodecs.stringUtf8(32767), SetSkinPayload::getSkinKey,
+            ByteBufCodecs.stringUtf8(32767), payload -> payload.getSkinId() == null ? "RESET" : payload.getSkinId().toString(),
             ByteBufCodecs.stringUtf8(262144), SetSkinPayload::getGeometry,
             ByteBufCodecs.byteArray(1048576), SetSkinPayload::getTextureData,
-            SetSkinPayload::new
+            (skinKeyStr, geometry, textureData) -> new SetSkinPayload(SkinId.parse(skinKeyStr), geometry, textureData)
         );
 
-        private final String skinKey;
+        private final SkinId skinId;
         private final String geometry;
         private final byte[] textureData;
 
-        public SetSkinPayload(String skinKey, String geometry, byte[] textureData) {
-            this.skinKey = skinKey;
+        public SetSkinPayload(SkinId skinId, String geometry, byte[] textureData) {
+            this.skinId = skinId;
             this.geometry = geometry;
             this.textureData = textureData == null ? new byte[0] : textureData;
         }
@@ -98,7 +100,7 @@ public final class BedrockSkinsNetworking {
         @Override
         public CustomPacketPayload.Type<?> type() { return ID; }
 
-        public String getSkinKey() { return skinKey; }
+        public SkinId getSkinId() { return skinId; }
         public String getGeometry() { return geometry; }
         public byte[] getTextureData() { return textureData; }
 
@@ -107,14 +109,14 @@ public final class BedrockSkinsNetworking {
             if (this == other) return true;
             if (other == null || getClass() != other.getClass()) return false;
             SetSkinPayload that = (SetSkinPayload) other;
-            if (!skinKey.equals(that.skinKey)) return false;
+            if (!Objects.equals(skinId, that.skinId)) return false;
             if (!geometry.equals(that.geometry)) return false;
             return Arrays.equals(textureData, that.textureData);
         }
 
         @Override
         public int hashCode() {
-            int result = skinKey.hashCode();
+            int result = (skinId == null ? 0 : skinId.hashCode());
             result = 31 * result + geometry.hashCode();
             result = 31 * result + Arrays.hashCode(textureData);
             return result;

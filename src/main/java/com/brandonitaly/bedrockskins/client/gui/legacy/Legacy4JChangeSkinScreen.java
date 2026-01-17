@@ -182,7 +182,7 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
             if (skin == null) return;
 
             try {
-                String skinKey = skin.getSkinId().toString();
+                SkinId skinId = skin.getSkinId();
                 SkinManager.setSkin(minecraft.player.getUUID().toString(), skin.getSerializeName(), skin.getSkinDisplayName());
 
                 // Load texture data
@@ -190,14 +190,14 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
 
                 //? if fabric {
                 ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(
-                    skinKey,
+                    skinId,
                     skin.getGeometryData().toString(),
                     textureData
                 ));
                 //? } else if neoforge {
                 net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(
                     new BedrockSkinsNetworking.SetSkinPayload(
-                        skinKey,
+                        skinId,
                         skin.getGeometryData().toString(),
                         textureData
                     )
@@ -215,10 +215,10 @@ public class Legacy4JChangeSkinScreen extends PanelVListScreen implements Contro
         if (minecraft.player != null) {
             SkinManager.resetSkin(minecraft.player.getUUID().toString());
             //? if fabric {
-            ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0]));
+            ClientPlayNetworking.send(new BedrockSkinsNetworking.SetSkinPayload(null, "", new byte[0]));
             //? } else if neoforge {
             net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(
-                new BedrockSkinsNetworking.SetSkinPayload("RESET", "", new byte[0])
+                new BedrockSkinsNetworking.SetSkinPayload(null, "", new byte[0])
             );
             //? }
             playUISound();

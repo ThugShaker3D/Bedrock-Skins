@@ -14,18 +14,18 @@ public final class BedrockModelManager {
     private static final Map<SkinId, BedrockPlayerModel> bedrockModels = new HashMap<>();
     private static final Gson gson = new Gson();
 
-    public static BedrockPlayerModel getModel(SkinId skinKey) {
-        if (skinKey == null) return null;
+    public static BedrockPlayerModel getModel(SkinId skinId) {
+        if (skinId == null) return null;
 
-        if (bedrockModels.containsKey(skinKey)) {
-            return bedrockModels.get(skinKey);
+        if (bedrockModels.containsKey(skinId)) {
+            return bedrockModels.get(skinId);
         }
 
-        var skin = SkinPackLoader.getLoadedSkin(skinKey);
+        var skin = SkinPackLoader.getLoadedSkin(skinId);
         if (skin == null) return null;
 
         try {
-            SkinPackLoader.registerTextureFor(skinKey);
+            SkinPackLoader.registerTextureFor(skinId);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -36,7 +36,7 @@ public final class BedrockModelManager {
             if (geometryList != null && !geometryList.isEmpty()) {
                 var geometry = geometryList.get(0);
                 var model = BedrockPlayerModel.create(geometry, false);
-                bedrockModels.put(skinKey, model);
+                bedrockModels.put(skinId, model);
                 return model;
             }
         } catch (Exception e) {

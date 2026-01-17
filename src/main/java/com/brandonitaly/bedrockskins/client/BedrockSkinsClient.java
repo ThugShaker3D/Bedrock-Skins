@@ -343,7 +343,7 @@ class CommonLogic {
             if (loadedSkin != null) {
                 byte[] textureData = loadTextureData(client, loadedSkin);
                 if (textureData.length > 0) {
-                    var packet = new BedrockSkinsNetworking.SetSkinPayload(savedKey, loadedSkin.getGeometryData().toString(), textureData);
+                    var packet = new BedrockSkinsNetworking.SetSkinPayload(SkinId.parse(savedKey), loadedSkin.getGeometryData().toString(), textureData);
                     
                     //? if fabric {
                     ClientPlayNetworking.send(packet);
@@ -362,18 +362,18 @@ class CommonLogic {
     }
 
     static void handleSkinUpdate(BedrockSkinsNetworking.SkinUpdatePayload p) {
-        String key = p.getSkinKey();
+        SkinId id = p.getSkinId();
         java.util.UUID uuid = p.getUuid();
         String geom = p.getGeometry();
         byte[] tex = p.getTextureData();
 
-        if ("RESET".equals(key)) {
+        if (id == null) {
             SkinManager.resetSkin(uuid.toString());
         } else {
+            String key = id.toString();
             SkinPackLoader.registerRemoteSkin(key, geom, tex);
-            String[] parts = key.split(":", 2);
-            String pack = parts.length == 2 ? parts[0] : "Remote";
-            String name = parts.length == 2 ? parts[1] : key;
+            String pack = id.getPack() == null || id.getPack().isEmpty() ? "Remote" : id.getPack();
+            String name = id.getName() == null || id.getName().isEmpty() ? id.toString() : id.getName();
             SkinManager.setSkin(uuid.toString(), pack, name);
         }
     }

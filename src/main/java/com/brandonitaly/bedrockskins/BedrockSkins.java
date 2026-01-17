@@ -42,10 +42,9 @@ public class BedrockSkins implements ModInitializer {
         // Handle player joining - send them all existing skins
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerSkinManager.getAllSkins().forEach((uuid, skinData) -> {
-                String key = skinData.getSkinId() == null ? null : skinData.getSkinId().toString();
                 ServerPlayNetworking.send(handler.player, new BedrockSkinsNetworking.SkinUpdatePayload(
                     uuid,
-                    key,
+                    skinData.getSkinId(),
                     skinData.geometry,
                     skinData.textureData
                 ));
@@ -54,7 +53,7 @@ public class BedrockSkins implements ModInitializer {
 
         // Handle client setting their skin
         ServerPlayNetworking.registerGlobalReceiver(BedrockSkinsNetworking.SetSkinPayload.ID, (payload, context) -> {
-            final String skinKey = payload.getSkinKey();
+            final SkinId skinId = payload.getSkinId();
             final ServerPlayer player = context.player();
             final UUID uuid = player.getUUID();
             final MinecraftServer server = context.server();
@@ -63,12 +62,12 @@ public class BedrockSkins implements ModInitializer {
             final byte[] textureData = payload.getTextureData();
 
             server.execute(() -> {
-                handleSkinSetLogic(server, player, uuid, skinKey, geometry, textureData);
+                handleSkinSetLogic(server, player, uuid, skinId, geometry, textureData);
             });
         });
     }
 
-    private void handleSkinSetLogic(MinecraftServer server, ServerPlayer player, UUID uuid, String skinKey, String geometry, byte[] textureData) {
+    private void handleSkinSetLogic(MinecraftServer server, ServerPlayer player, UUID uuid, SkinId skinId, String geometry, byte[] textureData) {
         // Security: Rate Limiting / cooldown (5s)
         final long now = System.currentTimeMillis();
         final Long last = lastSkinChange.get(uuid);
@@ -78,7 +77,7 @@ public class BedrockSkins implements ModInitializer {
         }
 
         // Security: Server-side Validation
-        if (!"RESET".equals(skinKey)) {
+        if (skinId != null) {
             // 1. Check Texture Size (512KB limit)
             if (textureData.length > 512 * 1024) {
                 logger.warn("Player {} sent oversized texture ({} bytes).", player.getName().getString(), textureData.length);
@@ -103,17 +102,17 @@ public class BedrockSkins implements ModInitializer {
             }
         }
 
-        logger.info("Player {} set skin to {}", player.getName().getString(), skinKey);
+        logger.info("Player {} set skin to {}", player.getName().getString(), (skinId == null ? "RESET" : skinId.toString()));
 
-        if ("RESET".equals(skinKey)) {
+        if (skinId == null) {
             ServerSkinManager.removeSkin(uuid);
         } else {
-            final PlayerSkinData data = new PlayerSkinData(SkinId.parse(skinKey), geometry, textureData);
+            final PlayerSkinData data = new PlayerSkinData(skinId, geometry, textureData);
             ServerSkinManager.setSkin(uuid, data);
         }
 
         // Broadcast to all players
-        final BedrockSkinsNetworking.SkinUpdatePayload updatePayload = new BedrockSkinsNetworking.SkinUpdatePayload(uuid, skinKey, geometry, textureData);
+        final BedrockSkinsNetworking.SkinUpdatePayload updatePayload = new BedrockSkinsNetworking.SkinUpdatePayload(uuid, skinId, geometry, textureData);
         server.getPlayerList().getPlayers().forEach(p -> ServerPlayNetworking.send(p, updatePayload));
         
         lastSkinChange.put(uuid, now);
@@ -160,7 +159,7 @@ public class BedrockSkins {
     private void handleSetSkinPacket(BedrockSkinsNetworking.SetSkinPayload payload, IPayloadContext context) {
         final net.minecraft.world.entity.player.Player player = context.player();
         final UUID uuid = player.getUUID();
-        final String skinKey = payload.getSkinKey();
+        final SkinId skinId = payload.getSkinId();
         final String geometry = payload.getGeometry();
         final byte[] textureData = payload.getTextureData();
         
@@ -171,7 +170,7 @@ public class BedrockSkins {
             return;
         }
 
-        if (!"RESET".equals(skinKey)) {
+        if (skinId != null) {
             if (textureData.length > 512 * 1024) {
                 logger.warn("Player {} sent oversized texture ({} bytes).", player.getName().getString(), textureData.length);
                 return;
@@ -186,18 +185,18 @@ public class BedrockSkins {
             }
         }
 
-        logger.info("Player {} set skin to {}", player.getName().getString(), skinKey);
+        logger.info("Player {} set skin to {}", player.getName().getString(), (skinId == null ? "RESET" : skinId.toString()));
 
-        if ("RESET".equals(skinKey)) {
+        if (skinId == null) {
             ServerSkinManager.removeSkin(uuid);
         } else {
-            final PlayerSkinData data = new PlayerSkinData(SkinId.parse(skinKey), geometry, textureData);
+            final PlayerSkinData data = new PlayerSkinData(skinId, geometry, textureData);
             ServerSkinManager.setSkin(uuid, data);
         }
         
         lastSkinChange.put(uuid, now);
 
-        final BedrockSkinsNetworking.SkinUpdatePayload updatePayload = new BedrockSkinsNetworking.SkinUpdatePayload(uuid, skinKey, geometry, textureData);
+        final BedrockSkinsNetworking.SkinUpdatePayload updatePayload = new BedrockSkinsNetworking.SkinUpdatePayload(uuid, skinId, geometry, textureData);
         PacketDistributor.sendToAllPlayers(updatePayload);
     }
 
@@ -207,7 +206,7 @@ public class BedrockSkins {
             ServerSkinManager.getAllSkins().forEach((uuid, skinData) -> {
                 PacketDistributor.sendToPlayer(serverPlayer, new BedrockSkinsNetworking.SkinUpdatePayload(
                     uuid,
-                    skinData.getSkinId() == null ? null : skinData.getSkinId().toString(),
+                    skinData.getSkinId(),
                     skinData.geometry,
                     skinData.textureData
                 ));

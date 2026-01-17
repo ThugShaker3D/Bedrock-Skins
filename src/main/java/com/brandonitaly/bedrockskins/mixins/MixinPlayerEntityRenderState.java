@@ -1,6 +1,7 @@
 package com.brandonitaly.bedrockskins.mixins;
 
 import com.brandonitaly.bedrockskins.client.BedrockSkinState;
+import com.brandonitaly.bedrockskins.pack.SkinId;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import java.util.UUID;
@@ -9,18 +10,18 @@ import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 @Mixin(AvatarRenderState.class)
 public class MixinPlayerEntityRenderState implements BedrockSkinState {
     @Unique
-    private String bedrockSkinKey;
+    private SkinId bedrockSkinId;
     @Unique
     private UUID uniqueId;
 
     @Override
-    public String getBedrockSkinKey() {
-        return bedrockSkinKey;
+    public SkinId getBedrockSkinId() {
+        return bedrockSkinId;
     }
 
     @Override
-    public void setBedrockSkinKey(String key) {
-        this.bedrockSkinKey = key;
+    public void setBedrockSkinId(SkinId id) {
+        this.bedrockSkinId = id;
     }
 
     @Override
