@@ -42,7 +42,6 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 public class SkinPreviewPanel {
-
     private final Minecraft minecraft;
     private final Font font;
     private final Runnable onFavoritesChanged;
@@ -157,7 +156,7 @@ public class SkinPreviewPanel {
         int btnX = x + (width / 2) - (btnW / 2);
         int startY = y + h - PANEL_PADDING - btnH - 4;
 
-        int baseStartY = startY; // this is the Y used for the reset button (bottom before swap)
+        int baseStartY = startY; // this is the Y used for the reset button
         int middleY = baseStartY - (btnH + 4); // middle row
 
         int selectBtnW = btnW - 20 - 2; // 20px for heart button, 2px gap
@@ -180,7 +179,6 @@ public class SkinPreviewPanel {
             resetButton.setY(middleY);
             resetButton.setWidth(selectBtnW);
         }
-
     }
 
     public void initPreviewState() {
@@ -327,8 +325,6 @@ public class SkinPreviewPanel {
         if (onFavoritesChanged != null) onFavoritesChanged.run();
     }
 
-
-
     private void updateActionButtons() {
         // Called when skin/player state changes to update reset/preview button states
         if (resetButton != null) {
@@ -369,25 +365,25 @@ public class SkinPreviewPanel {
             resetActive = selectedSkin != null || currentSkinId != null;
         }
         if (resetButton != null) resetButton.active = resetActive;
-
-
     }
 
     public void render(GuiGraphics gui, int mouseX, int mouseY) {
-
-
         GuiUtils.drawPanelChrome(gui, x, y, width, height, Component.translatable("bedrockskins.gui.preview"), font);
         
         int PANEL_HEADER_HEIGHT = 24;
         int entityY = y + PANEL_HEADER_HEIGHT;
         int buttonsHeight = 90;
         int entityH = height - PANEL_HEADER_HEIGHT - buttonsHeight;
+        
         // Reserve vertical space for the rotate hint sprite so it never overlaps preview or buttons
-        int rotateW = 45;
-        int rotateH = 7;
+        // Dynamic scaling: ~30% of panel width, clamped between 30px and 90px
+        int rotateW = Math.max(30, Math.min((int)(width * 0.3f), 90));
+        int rotateH = (int)Math.ceil(rotateW * (7.0f / 45.0f)); // Maintain 45:7 ratio
+        
         int rotateGap = 6; // space between preview and rotate sprite
         int reservedForRotate = rotateH + rotateGap;
         int availableHeight = Math.max(entityH - reservedForRotate, 0);
+        
         previewLeft = x;
         previewRight = x + width;
         previewTop = entityY;
@@ -395,12 +391,13 @@ public class SkinPreviewPanel {
         int centerX = x + width / 2;
         int centerY = entityY + availableHeight / 2 + 15;
 
+        // Calculate Y position where the UI (text/buttons) starts
+        int PANEL_PADDING = 4;
+        int btnH = 20;
+        int uiStartY = y + height - PANEL_PADDING - (btnH * 2) - 8 - font.lineHeight - 4;
+
         if (dummyPlayer != null) {
-            //? if >=1.21.11 {
             dummyPlayer.tickCount = (int)(Util.getMillis() / 50L);
-            //?} else {
-            dummyPlayer.tickCount = (int)(Util.getMillis() / 50L);
-            //?}
             
             // Update rotation when dragging
             if (isDraggingPreview) {
@@ -413,9 +410,18 @@ public class SkinPreviewPanel {
             
             renderRotatableEntity(gui, centerX, centerY, width, availableHeight, dummyPlayer);
 
-            // Draw rotate hint sprite centered below the preview area, above buttons
+            // Draw rotate hint sprite centered between the preview area and the UI buttons/text
             int rotateX = centerX - (rotateW / 2);
-            int rotateY = previewBottom + rotateGap;
+            
+            // Calculate gap and center the sprite within it
+            int gap = uiStartY - previewBottom;
+            int rotateY = previewBottom + (gap - rotateH) / 2;
+            
+            // Safety check: ensure it doesn't overlap the preview bottom (use default gap as min)
+            if (rotateY < previewBottom + rotateGap) {
+                rotateY = previewBottom + rotateGap;
+            }
+
             gui.blitSprite(RenderPipelines.GUI_TEXTURED, ROTATE_SPRITE, rotateX, rotateY, rotateW, rotateH);
         } else {
             int textY = entityY + (availableHeight / 2) - (font.lineHeight / 2);
@@ -425,10 +431,8 @@ public class SkinPreviewPanel {
         if (selectedSkin != null) {
             String name = SkinPackLoader.getTranslation(selectedSkin.getSafeSkinName());
             if (name == null) name = selectedSkin.getSkinDisplayName();
-            int PANEL_PADDING = 4;
-            int btnH = 20;
-            int textY = y + height - PANEL_PADDING - (btnH * 2) - 8 - font.lineHeight - 4; // Above the buttons
-            gui.drawCenteredString(font, name, centerX, textY, 0xFFAAAAAA);
+            // Use calculated uiStartY to ensure consistency with rotation sprite placement
+            gui.drawCenteredString(font, name, centerX, uiStartY, 0xFFAAAAAA);
         }
     }
     
@@ -451,12 +455,18 @@ public class SkinPreviewPanel {
     }
     
     private void renderRotatableEntity(GuiGraphics gui, int x, int y, int width, int height, LivingEntity entity) {
-        // Calculate size for the entity render (keep moderate defaults)
-        int size = Math.min((int)(height / 2.5), 80);
+        float fillPercentage = 0.43f; 
+        int scale = (int)(height * fillPercentage);
+        
+        // Ensure reasonable minimum and remove restrictive max cap
+        scale = Math.max(scale, 20);
+
         // Compute yaw offset from rotationX and render via shared helper
         float rotationModifier = 3;
         float yawOffset = rotationX * rotationModifier;
-        GuiUtils.renderEntityInRect(gui, entity, yawOffset, (int)(x - width), (int)(y - height), (int)(x + width), (int)(y + height), 72);
+        
+        // Pass the dynamically calculated scale
+        GuiUtils.renderEntityInRect(gui, entity, yawOffset, (int)(x - width), (int)(y - height), (int)(x + width), (int)(y + height), scale);
     }
     
     public void renderSprites(GuiGraphics gui) {
@@ -464,8 +474,6 @@ public class SkinPreviewPanel {
             favoriteButton.renderSprites(gui);
         }
     }
-
-
 
     private void safeResetPreview(String uuid) { GuiUtils.safeResetPreview(uuid); }
     private void safeRegisterTexture(String key) { GuiUtils.safeRegisterTexture(key); }
@@ -544,6 +552,4 @@ public class SkinPreviewPanel {
         }
     }*/
     //?}
-
-
 }
