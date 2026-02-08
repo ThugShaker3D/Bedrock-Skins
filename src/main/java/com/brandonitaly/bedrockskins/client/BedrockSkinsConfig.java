@@ -22,6 +22,9 @@ public class BedrockSkinsConfig {
     //? }
 
     private static boolean scanResourcePacksForSkins = true;
+    private static String packSorting = "default";
+    private static boolean allowPackCapeOverride = true;
+    private static boolean allowPackElytraOverride = true;
 
     static {
         load();
@@ -36,13 +39,51 @@ public class BedrockSkinsConfig {
         save();
     }
 
+    public static synchronized String getPackSorting() {
+        return packSorting;
+    }
+
+    public static synchronized void setPackSorting(String sorting) {
+        packSorting = sorting;
+        save();
+    }
+
+    public static synchronized boolean isAllowPackCapeOverride() {
+        return allowPackCapeOverride;
+    }
+
+    public static synchronized void setAllowPackCapeOverride(boolean allow) {
+        allowPackCapeOverride = allow;
+        save();
+    }
+
+    public static synchronized boolean isAllowPackElytraOverride() {
+        return allowPackElytraOverride;
+    }
+
+    public static synchronized void setAllowPackElytraOverride(boolean allow) {
+        allowPackElytraOverride = allow;
+        save();
+    }
+
     private static void load() {
         try {
             if (Files.exists(CONFIG_PATH)) {
                 try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
                     JsonObject obj = GSON.fromJson(r, JsonObject.class);
-                    if (obj != null && obj.has("scanResourcePacksForSkins")) {
-                        scanResourcePacksForSkins = obj.get("scanResourcePacksForSkins").getAsBoolean();
+                    if (obj != null) {
+                        if (obj.has("scanResourcePacksForSkins")) {
+                            scanResourcePacksForSkins = obj.get("scanResourcePacksForSkins").getAsBoolean();
+                        }
+                        if (obj.has("packSorting")) {
+                            packSorting = obj.get("packSorting").getAsString();
+                        }
+                        if (obj.has("allowPackCapeOverride")) {
+                            allowPackCapeOverride = obj.get("allowPackCapeOverride").getAsBoolean();
+                        }
+                        if (obj.has("allowPackElytraOverride")) {
+                            allowPackElytraOverride = obj.get("allowPackElytraOverride").getAsBoolean();
+                        }
                     }
                 }
             }
@@ -56,6 +97,9 @@ public class BedrockSkinsConfig {
             Files.createDirectories(CONFIG_PATH.getParent());
             JsonObject obj = new JsonObject();
             obj.addProperty("scanResourcePacksForSkins", scanResourcePacksForSkins);
+            obj.addProperty("packSorting", packSorting);
+            obj.addProperty("allowPackCapeOverride", allowPackCapeOverride);
+            obj.addProperty("allowPackElytraOverride", allowPackElytraOverride);
             try (Writer w = Files.newBufferedWriter(CONFIG_PATH)) {
                 GSON.toJson(obj, w);
             }

@@ -2,7 +2,6 @@ package com.brandonitaly.bedrockskins.client;
 
 import com.brandonitaly.bedrockskins.bedrock.BedrockBone;
 import com.brandonitaly.bedrockskins.bedrock.BedrockGeometry;
-import net.minecraft.client.model.*;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartNames;
 import net.minecraft.client.model.geom.PartPose;

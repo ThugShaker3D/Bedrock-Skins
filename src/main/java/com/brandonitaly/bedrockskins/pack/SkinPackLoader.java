@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 //? if >=1.21.11 {
@@ -69,6 +68,14 @@ public final class SkinPackLoader {
         translations.clear();
         packTypesByPackId.clear();
 
+        // PMO was here
+        Minecraft client = null;
+        try { client = Minecraft.getInstance(); } catch (Exception e) { /* continue anyway */ }
+        if (client != null) {
+            ResourceManager manager = client.getResourceManager();
+            loadVanillaGeometry(manager);
+        }
+
         // Load external skin packs from skin_packs directory
         if (skinPacksDir.exists()) {
             File[] children = skinPacksDir.listFiles();
@@ -114,14 +121,12 @@ public final class SkinPackLoader {
             }
         }
 
-        Minecraft client = null;
-        try { client = Minecraft.getInstance(); } catch (Exception e) { return; }
-        if (client == null) return;
-        ResourceManager manager = client.getResourceManager();
-
-        loadVanillaGeometry(manager);
-        loadInternalPacks(manager);
-        loadPackOrder(manager);
+        // Continue with remaining loading if we have a client
+        if (client != null) {
+            ResourceManager manager = client.getResourceManager();
+            loadInternalPacks(manager);
+            loadPackOrder(manager);
+        }
     }
 
     private static File getResourcepacksDir() {
@@ -322,8 +327,18 @@ public final class SkinPackLoader {
 
     private static JsonObject resolveGeometry(String name, JsonObject localGeo) {
         JsonObject raw = findGeometryNode(localGeo, name);
-        if (raw == null) raw = findGeometryNode(vanillaGeometryJson, name);
-        if (raw == null) return null;
+        if (raw == null) {
+            // Try vanilla geometry as fallback
+            if (vanillaGeometryJson != null) {
+                raw = findGeometryNode(vanillaGeometryJson, name);
+            } else {
+                System.out.println("SkinPackLoader: Warning - vanilla geometry not loaded yet when resolving: " + name);
+            }
+        }
+        if (raw == null) {
+            System.out.println("SkinPackLoader: Failed to resolve geometry: " + name);
+            return null;
+        }
         return wrapGeometry(raw.deepCopy(), name);
     }
 
@@ -423,13 +438,13 @@ public final class SkinPackLoader {
 
     private static void loadSkinsFromResourcePackZip(File pack) {
         try (ZipFile zf = new ZipFile(pack)) {
-            // Find all skins.json files under assets/bedrockskins/skin_packs/<packName>/skins.json
+            // Find all skins.json files under skin_packs/<packName>/skins.json
             Enumeration<? extends ZipEntry> entries = zf.entries();
             Set<String> packDirs = new HashSet<>();
             while (entries.hasMoreElements()) {
                 ZipEntry e = entries.nextElement();
                 String name = e.getName();
-                if (name.startsWith("assets/bedrockskins/skin_packs/") && name.endsWith("/skins.json")) {
+                if (name.startsWith("skin_packs/") && name.endsWith("/skins.json")) {
                     String dir = name.substring(0, name.lastIndexOf('/'));
                     packDirs.add(dir);
                 }

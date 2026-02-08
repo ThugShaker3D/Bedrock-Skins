@@ -56,6 +56,7 @@ public class SkinSelectionScreen extends Screen {
     
     private String selectedPackId;
     private boolean wasMousePressed = false;
+    private String currentSorting = "default";
     
     private final Map<String, List<LoadedSkin>> skinCache = new HashMap<>();
 
@@ -80,6 +81,9 @@ public class SkinSelectionScreen extends Screen {
     protected void init() {
         super.init();
         FavoritesManager.load();
+        
+        // Arbys. We have the sortse
+        currentSorting = BedrockSkinsConfig.getPackSorting();
         
         buildSkinCache();
         calculateLayout();
@@ -164,7 +168,7 @@ public class SkinSelectionScreen extends Screen {
         calculateLayout(null);
     }
 
-    private void calculateLayout(net.minecraft.client.gui.navigation.ScreenRectangle tabArea) {
+    private void calculateLayout(ScreenRectangle tabArea) {
         int hMargin = 10;
         int gap = 6;
         int topY;
@@ -311,7 +315,7 @@ public class SkinSelectionScreen extends Screen {
              btnWidth = Math.min(maxButtonWidth, w);
         } else {
              columns = 1;
-             btnWidth = Math.min(singleColMaxWidth, contentW);
+             btnWidth = Math.min(310, contentW);
         }
         
         // Calculate starting X to center the grid/list
@@ -388,14 +392,41 @@ public class SkinSelectionScreen extends Screen {
         List<String> sortedPacks = new ArrayList<>(skinCache.keySet());
         sortedPacks.remove("skinpack.Favorites"); 
         
-        sortedPacks.sort((k1, k2) -> {
-            int i1 = SkinPackLoader.packOrder.indexOf(k1);
-            int i2 = SkinPackLoader.packOrder.indexOf(k2);
-            if (i1 != -1 && i2 != -1) return Integer.compare(i1, i2);
-            if (i1 != -1) return -1;
-            if (i2 != -1) return 1;
-            return k1.compareToIgnoreCase(k2);
-        });
+        switch (currentSorting) {
+            case "name_az":
+                sortedPacks.sort((a, b) -> {
+                    String nameA = getPackDisplayName(a);
+                    String nameB = getPackDisplayName(b);
+                    return nameA.compareToIgnoreCase(nameB);
+                });
+                break;
+            case "name_za":
+                sortedPacks.sort((a, b) -> {
+                    String nameA = getPackDisplayName(a);
+                    String nameB = getPackDisplayName(b);
+                    return nameB.compareToIgnoreCase(nameA);
+                });
+                break;
+            case "skin_count":
+                sortedPacks.sort((a, b) -> {
+                    List<LoadedSkin> skinsA = skinCache.get(a);
+                    List<LoadedSkin> skinsB = skinCache.get(b);
+                    int countA = skinsA != null ? skinsA.size() : 0;
+                    int countB = skinsB != null ? skinsB.size() : 0;
+                    return Integer.compare(countB, countA);
+                });
+                break;
+            default:
+                sortedPacks.sort((k1, k2) -> {
+                    int i1 = SkinPackLoader.packOrder.indexOf(k1);
+                    int i2 = SkinPackLoader.packOrder.indexOf(k2);
+                    if (i1 != -1 && i2 != -1) return Integer.compare(i1, i2);
+                    if (i1 != -1) return -1;
+                    if (i2 != -1) return 1;
+                    return k1.compareToIgnoreCase(k2);
+                });
+                break;
+        }
 
         if (!FavoritesManager.getFavoriteKeys().isEmpty()) {
             sortedPacks.add(0, "skinpack.Favorites");
@@ -430,6 +461,72 @@ public class SkinSelectionScreen extends Screen {
         if (selectedPackId == null && !sortedPacks.isEmpty()) {
             selectPack(sortedPacks.get(0));
         }
+    }
+
+    private void cycleSorting() {
+        switch (currentSorting) {
+            case "default":
+                currentSorting = "name_az";
+                break;
+            case "name_az":
+                currentSorting = "name_za";
+                break;
+            case "name_za":
+                currentSorting = "skin_count";
+                break;
+            case "skin_count":
+                currentSorting = "default";
+                break;
+            default:
+                currentSorting = "default";
+                break;
+        }
+        
+        BedrockSkinsConfig.setPackSorting(currentSorting);
+        refreshPackList();
+        
+        if (selectedPackId != null && skinCache.containsKey(selectedPackId)) {
+            selectPack(selectedPackId);
+        }
+    }
+
+    @Override
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent click, boolean doubled) {
+        if (activeTab == 0 && click.button() == 0) {
+            int titleX = rPacks.x + 4;
+            int titleY = rPacks.y + 6;
+            int titleWidth = font.width(Component.translatable("bedrockskins.gui.packs"));
+            int titleHeight = font.lineHeight;
+            
+            int clickAreaX = titleX + titleWidth + 1;
+            int clickAreaWidth = 40;
+            int clickAreaY = titleY;
+            int clickAreaHeight = titleHeight;
+            
+            if (click.x() >= clickAreaX && click.x() <= clickAreaX + clickAreaWidth &&
+                click.y() >= clickAreaY && click.y() <= clickAreaY + clickAreaHeight) {
+                cycleSorting();
+                return true;
+            }
+        }
+        
+        return super.mouseClicked(click, doubled);
+    }
+
+    private String getPackDisplayName(String packId) {
+        if ("skinpack.Favorites".equals(packId)) {
+            return Component.translatable("bedrockskins.gui.favorites").getString();
+        }
+        
+        List<LoadedSkin> skins = skinCache.get(packId);
+        if (skins != null && !skins.isEmpty()) {
+            LoadedSkin first = skins.get(0);
+            String safe = first.getSafePackName();
+            String translation = SkinPackLoader.getTranslation(safe);
+            return translation != null ? translation : first.getPackDisplayName();
+        }
+        
+        return packId;
     }
 
     private void selectPack(String packId) {
@@ -467,7 +564,20 @@ public class SkinSelectionScreen extends Screen {
     public void render(GuiGraphics gui, int mouseX, int mouseY, float delta) {
         // Only draw the pack & skins panels for the Skins tab
         if (activeTab == 0) {
-            GuiUtils.drawPanelChrome(gui, rPacks.x, rPacks.y, rPacks.w, rPacks.h, Component.translatable("bedrockskins.gui.packs"), font);
+            GuiUtils.drawPanelChrome(gui, rPacks.x, rPacks.y, rPacks.w, rPacks.h, 
+                Component.translatable("bedrockskins.gui.packs"), font);
+            
+            int titleX = rPacks.x + 4;
+            int titleY = rPacks.y + 6;
+            int titleWidth = font.width(Component.translatable("bedrockskins.gui.packs"));
+            int titleHeight = font.lineHeight;
+            boolean titleHovered = mouseX >= titleX && mouseX <= titleX + titleWidth &&
+                               mouseY >= titleY && mouseY <= titleY + titleHeight;
+            
+            if (titleHovered) {
+                gui.fill(titleX, titleY + titleHeight, titleWidth, 1, 0xFFFFFF);
+            }
+            
             GuiUtils.drawPanelChrome(gui, rSkins.x, rSkins.y, rSkins.w, rSkins.h, getSkinsPanelTitle(), font);
         }
         
@@ -515,8 +625,6 @@ public class SkinSelectionScreen extends Screen {
         int bottom() { return y + h; }
         int centerX() { return x + (w / 2); }
     }
-    
-
 
     @Override
     public void onClose() {
@@ -609,15 +717,16 @@ public class SkinSelectionScreen extends Screen {
             int contentX = rSkins.x + PANEL_PADDING;
             
             int btnH = 20; // standard height
-            // Calculate optimal width: min(300, available) but check bounds
+            int gapY = 6;
+            
             int btnW = Math.min(300, contentW);
             
-            // Center the button in content area
-            int x = contentX + (contentW - btnW) / 2;
-            int y = rSkins.y + PANEL_HEADER_HEIGHT + PANEL_PADDING + 8;
+            int centerX = contentX + (contentW - btnW) / 2;
+            int startY = rSkins.y + PANEL_HEADER_HEIGHT + PANEL_PADDING + 8;
 
+            // Scan resource packs toggle
             CycleButton<Boolean> scanToggle = CycleButton.onOffBuilder(BedrockSkinsConfig.isScanResourcePacksForSkinsEnabled())
-                .create(x, y, btnW, btnH, Component.translatable("bedrockskins.option.scan_resourcepacks"), (button, value) -> {
+                .create(centerX, startY, btnW, btnH, Component.translatable("bedrockskins.option.scan_resourcepacks"), (button, value) -> {
                     BedrockSkinsConfig.setScanResourcePacksForSkins(value);
                     try {
                         SkinPackLoader.loadPacks();
@@ -631,6 +740,63 @@ public class SkinSelectionScreen extends Screen {
             SkinSelectionScreen.this.addRenderableWidget(scanToggle);
             scanToggle.setTooltip(Tooltip.create(Component.translatable("bedrockskins.option.scan_resourcepacks.tooltip")));
             SkinSelectionScreen.this.customizationWidgets.add(scanToggle);
+
+            // override yer capes
+            int capeY = startY + btnH + gapY;
+            String capeOverrideText = getBedrockTranslation("bedrockskins.option.cape_override", "Allow Cape Override");
+            CycleButton<Boolean> capeToggle = CycleButton.onOffBuilder(BedrockSkinsConfig.isAllowPackCapeOverride())
+                .create(centerX, capeY, btnW, btnH, Component.literal(capeOverrideText), (button, value) -> {
+                    BedrockSkinsConfig.setAllowPackCapeOverride(value);
+                });
+
+            SkinSelectionScreen.this.addRenderableWidget(capeToggle);
+            String capeOverrideTooltip = getBedrockTranslation("bedrockskins.option.cape_override.tooltip", "Allow skin packs to override your equipped cape");
+            capeToggle.setTooltip(Tooltip.create(Component.literal(capeOverrideTooltip)));
+            SkinSelectionScreen.this.customizationWidgets.add(capeToggle);
+
+            // override yer elytras
+            int elytraY = capeY + btnH + gapY;
+            String elytraOverrideText = getBedrockTranslation("bedrockskins.option.elytra_override", "Allow Elytra Override");
+            CycleButton<Boolean> elytraToggle = CycleButton.onOffBuilder(BedrockSkinsConfig.isAllowPackElytraOverride())
+                .create(centerX, elytraY, btnW, btnH, Component.literal(elytraOverrideText), (button, value) -> {
+                    BedrockSkinsConfig.setAllowPackElytraOverride(value);
+                });
+
+            SkinSelectionScreen.this.addRenderableWidget(elytraToggle);
+            String elytraOverrideTooltip = getBedrockTranslation("bedrockskins.option.elytra_override.tooltip", "Allow skin packs to override your elytra texture");
+            elytraToggle.setTooltip(Tooltip.create(Component.literal(elytraOverrideTooltip)));
+            SkinSelectionScreen.this.customizationWidgets.add(elytraToggle);
+
+            // customize yer capes
+            //? if fabric {
+            boolean customCapesLoaded = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ep-custom-capes");
+            
+            if (customCapesLoaded) {
+                int customCapesY = elytraY + btnH + gapY;
+                String customCapeText = getBedrockTranslation("bedrockskins.button.select_custom_cape", "Select Custom Cape");
+                Button customCapesButton = Button.builder(Component.literal(customCapeText), button -> {
+                    try {
+                        Class<?> customCapesClass = Class.forName("dev.epicpix.custom_capes.CapeOptionsScreen");
+                        net.minecraft.client.gui.screens.Screen customCapesScreen = (net.minecraft.client.gui.screens.Screen) customCapesClass
+                            .getDeclaredConstructor(net.minecraft.client.gui.screens.Screen.class, net.minecraft.client.Options.class)
+                            .newInstance(SkinSelectionScreen.this, SkinSelectionScreen.this.minecraft.options);
+                        SkinSelectionScreen.this.minecraft.setScreen(customCapesScreen);
+                    } catch (Exception e) {
+                        System.out.println("Failed to open Custom Capes GUI: " + e.getMessage());
+                    }
+                }).bounds(centerX, customCapesY, btnW, btnH).build();
+
+                SkinSelectionScreen.this.addRenderableWidget(customCapesButton);
+                String customCapeTooltip = getBedrockTranslation("bedrockskins.button.select_custom_cape.tooltip", "Open Custom Capes selection screen (Custom Capes mod required)");
+                customCapesButton.setTooltip(Tooltip.create(Component.literal(customCapeTooltip)));
+                SkinSelectionScreen.this.customizationWidgets.add(customCapesButton);
+            }
+            //?}
         }
+    }
+
+    private String getBedrockTranslation(String key, String fallback) {
+        String translation = SkinPackLoader.getTranslation(key);
+        return translation != null ? translation : fallback;
     }
 }

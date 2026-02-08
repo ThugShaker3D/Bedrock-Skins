@@ -17,7 +17,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
-//? } else if neoforge {
+//?} else if neoforge {
 /*import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.bus.api.IEventBus;
@@ -29,7 +29,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;*/
-//? }
+//?}
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 //? if >=1.21.11 {
@@ -66,9 +66,9 @@ public class BedrockSkinsClient implements ClientModInitializer {
     public void onInitializeClient() {
         //? if >1.21.8 {
         //? if >=1.21.11 {
-        keybindCategory = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("bedrockskins", "controls"));
+        keybindCategory = new KeyMapping.Category(Identifier.fromNamespaceAndPath("bedrockskins", "controls"));
         //?} else {
-        /*keybindCategory = KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("bedrockskins", "controls"));*/
+        keybindCategory = KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("bedrockskins", "controls"));
         //?}
         //?}
         registerKeyBinding();
@@ -182,7 +182,7 @@ public class BedrockSkinsClient implements ClientModInitializer {
         }
     }
 }
-//? } else if neoforge {
+//?} else if neoforge {
 /*public class BedrockSkinsClient {
     private static KeyMapping toggleCapeKey;
     private static KeyMapping toggleJacketKey;
@@ -287,7 +287,7 @@ public class BedrockSkinsClient implements ClientModInitializer {
         }
     }
 }*/
-//? }
+//?}
 
 // Shared Logic Container
 class CommonLogic {
@@ -347,11 +347,11 @@ class CommonLogic {
                     
                     //? if fabric {
                     ClientPlayNetworking.send(packet);
-                    //? } else if neoforge {
+                    //?} else if neoforge {
                     /*if (client.getConnection() != null) {
                         client.getConnection().send(new ServerboundCustomPayloadPacket(packet));
                     }*/
-                    //? }
+                    //?}
                     
                     System.out.println("BedrockSkinsClient: Synced skin " + savedKey);
                 }
